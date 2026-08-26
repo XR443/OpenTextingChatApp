@@ -1,0 +1,55 @@
+-- accounts/AccountsUpdates.sq
+-- Обновление пароля
+updateAccountPassword:
+UPDATE accounts
+SET password = ?, updated = ?
+WHERE id = ?;
+
+-- Обновление username
+updateAccountUsername:
+UPDATE accounts
+SET username = ?, updated = ?
+WHERE id = ?;
+
+-- Обновление host
+updateAccountHost:
+UPDATE accounts
+SET host = ?, updated = ?
+WHERE id = ?;
+
+-- Обновление статуса is_main
+updateAccountMainStatus:
+UPDATE accounts
+SET is_main = ?, updated = ?
+WHERE id = ?;
+
+-- Установка аккаунта как основного (сбрасываем все остальные)
+setAccountAsMain:
+UPDATE accounts
+SET is_main = (id = ?), updated = ?;
+
+-- Более безопасная версия установки основного аккаунта
+setAccountAsMainSafe:
+UPDATE accounts
+SET is_main = CASE
+    WHEN id = ? THEN 1
+    ELSE 0
+END,
+updated = ?;
+
+-- Обновление всего аккаунта
+updateAccount:
+UPDATE accounts
+SET
+    username = ?,
+    host = ?,
+    password = ?,
+    is_main = ?,
+    updated = ?
+WHERE id = ?;
+
+-- Обновление времени последнего обновления
+touchAccount:
+UPDATE accounts
+SET updated = ?
+WHERE id = ?;

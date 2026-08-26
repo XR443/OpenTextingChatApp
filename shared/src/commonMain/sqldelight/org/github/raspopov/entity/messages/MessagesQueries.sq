@@ -1,0 +1,41 @@
+-- messages/MessagesQueries.sq
+-- Получение диалога
+getDialogMessages:
+SELECT * FROM messages
+WHERE account_id = ? AND ((author = ? AND recipient = ?) OR (author = ? AND recipient = ?))
+ORDER BY created DESC;
+
+-- Получение последних N сообщений диалога
+getLastDialogMessages:
+SELECT * FROM messages
+WHERE (author = ? AND recipient = ?) OR (author = ? AND recipient = ?)
+ORDER BY created DESC
+LIMIT ?;
+
+-- Получение всех сообщений пользователя
+getMessagesForUser:
+SELECT * FROM messages
+WHERE author = ? OR recipient = ?
+ORDER BY created DESC;
+
+-- Получение всех сообщений, которые создал пользователь
+getMessagesAuthoredByUser:
+SELECT * FROM messages
+WHERE account_id = ? AND author = ?
+ORDER BY created DESC ;
+
+-- Получение непрочитанных сообщений
+getUnreadMessagesForUser:
+SELECT * FROM messages
+WHERE recipient = ? AND status != 'READ'
+ORDER BY created DESC;
+
+-- Получение количества непрочитанных сообщений
+getUnreadMessagesCount:
+SELECT COUNT(*) FROM messages
+WHERE recipient = ? AND status != 'READ';
+
+-- Получение количества непрочитанных сообщений от автора
+getUnreadMessagesCountFromAuthor:
+SELECT COUNT(*) FROM messages
+WHERE recipient = ? AND author = ? AND status != 'READ';

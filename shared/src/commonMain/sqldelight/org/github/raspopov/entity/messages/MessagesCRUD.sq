@@ -1,0 +1,22 @@
+-- messages/MessagesCRUD.sq
+-- Вставка нового сообщения
+insertMessage:
+INSERT INTO messages (
+    id, account_id, internal_id, author, recipient, payload, type, status, created, updated
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- Получение сообщения по internal_id
+getMessageByInternalId:
+SELECT * FROM messages WHERE internal_id = ?;
+
+-- Получение сообщения по id
+getMessageById:
+SELECT * FROM messages WHERE account_id = ? AND id = ?;
+
+-- Удаление сообщения
+deleteMessage:
+DELETE FROM messages WHERE internal_id = ?;
+
+-- Удаление всех сообщений пользователя
+deleteAllMessagesForUser:
+DELETE FROM messages WHERE author = ? OR recipient = ?;

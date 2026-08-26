@@ -1,0 +1,20 @@
+-- Вставка или обновление публичного ключа
+insertOrUpdate:
+INSERT OR REPLACE INTO public_keys(
+    user_id, account_id, username, public_key
+) VALUES(?, ?, ?,?);
+
+-- Получение ключа пользователя
+selectByUserId:
+SELECT * FROM public_keys
+WHERE user_id = ?;
+
+-- Получение всех пользователей
+selectAllUsersForAccount:
+SELECT * FROM public_keys
+WHERE account_id = ?;
+
+-- Получение всех пользователей
+deleteByIdAndAccountId:
+DELETE FROM public_keys
+WHERE user_id = ? AND account_id = ?;

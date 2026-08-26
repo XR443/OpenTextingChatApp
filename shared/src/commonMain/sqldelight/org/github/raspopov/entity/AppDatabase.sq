@@ -1,0 +1,59 @@
+-- Создание таблицы сообщений
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT NOT NULL,                             -- Uuid
+    account_id TEXT NOT NULL,                     -- Uuid
+    internal_id TEXT NOT NULL UNIQUE,             -- Uuid
+    author TEXT NOT NULL,                         -- Uuid
+    recipient TEXT NOT NULL,                      -- Uuid
+    payload BLOB,
+    type TEXT NOT NULL,                           -- Type enum: TEXT, IMAGE, AUDIO, VIDEO
+    status TEXT NOT NULL,                         -- Status enum: SENDING, CONFIRMED, READ, UNKNOWN
+    created INTEGER NOT NULL,                     -- Unix timestamp in milliseconds (Instant)
+    updated INTEGER NOT NULL,                      -- Unix timestamp in milliseconds (Instant)
+    PRIMARY KEY (id, account_id)
+);
+
+-- Индексы для оптимизации
+CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(account_id, author);
+CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(account_id, recipient);
+CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(account_id, status);
+CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(account_id, created);
+CREATE INDEX IF NOT EXISTS idx_messages_recipient_status ON messages(account_id, recipient, status);
+CREATE INDEX IF NOT EXISTS idx_messages_dialog ON messages(account_id, author, recipient, created DESC);
+
+-- Создание таблицы аккаунтов
+CREATE TABLE IF NOT EXISTS accounts (
+    id TEXT PRIMARY KEY,                    -- Uuid
+    username TEXT NOT NULL,
+    host TEXT NOT NULL,
+    password BLOB NOT NULL,                 -- В реальном проекте хранить в зашифрованном виде
+    is_main INTEGER NOT NULL DEFAULT 0,     -- 0 = false, 1 = true (SQLite не имеет BOOLEAN)
+    created INTEGER NOT NULL,               -- Unix timestamp в миллисекундах
+    updated INTEGER NOT NULL,
+    salt BLOB NOT NULL,
+    privateKey BLOB NOT NULL,
+    publicKey BLOB NOT NULL
+);
+
+-- Уникальное ограничение: один пользователь на хосте
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_unique ON accounts(username, host);
+
+-- Индексы для оптимизации запросов
+CREATE INDEX IF NOT EXISTS idx_accounts_username ON accounts(username);
+CREATE INDEX IF NOT EXISTS idx_accounts_host ON accounts(host);
+CREATE INDEX IF NOT EXISTS idx_accounts_is_main ON accounts(is_main);
+CREATE INDEX IF NOT EXISTS idx_accounts_created ON accounts(created);
+CREATE INDEX IF NOT EXISTS idx_accounts_updated ON accounts(updated);
+
+-- Индекс для поиска по части username
+CREATE INDEX IF NOT EXISTS idx_accounts_username_prefix ON accounts(username);
+
+-- Таблица для хранения публичных ключей пользователей
+CREATE TABLE IF NOT EXISTS public_keys (
+    user_id TEXT NOT NULL PRIMARY KEY,
+    account_id TEXT NOT NULL,
+    username TEXT NOT NULL,
+    public_key BLOB NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_for_account ON public_keys(account_id, user_id);

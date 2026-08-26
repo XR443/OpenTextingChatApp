@@ -1,0 +1,64 @@
+-- accounts/AccountsCRUD.sq
+-- Вставка нового аккаунта
+insertAccount:
+INSERT INTO accounts (
+    id, username, host, password, is_main, created, updated, salt, privateKey,publicKey
+) VALUES (?, ?, ?, ?, ?, ?, ?,?,?,?);
+
+-- Вставка или обновление (UPSERT)
+insertOrReplaceAccount:
+INSERT OR REPLACE INTO accounts (
+    id, username, host, password, is_main, created, updated, salt, privateKey,publicKey
+) VALUES (?, ?, ?, ?, ?, ?, ?,?,?,?);
+
+-- Обновление
+updateAccount:
+UPDATE accounts
+SET username=?, host=?, password=?, is_main=?, updated=?
+WHERE id=?;
+
+-- Обновление main аккаунта
+updateMainAccount:
+UPDATE accounts
+SET is_main = CASE
+    WHEN id = ? THEN 1
+    ELSE 0
+END;
+
+-- Получение аккаунта по ID
+getAccountById:
+SELECT * FROM accounts WHERE id = ?;
+
+-- Получение аккаунта по username и host
+getAccountByUsernameAndHost:
+SELECT * FROM accounts
+WHERE username = ? AND host = ?;
+
+-- Получение всех аккаунтов
+getAllAccounts:
+SELECT * FROM accounts
+ORDER BY created DESC;
+
+-- Удаление аккаунта по ID
+deleteAccountById:
+DELETE FROM accounts WHERE id = ?;
+
+-- Удаление аккаунта по username и host
+deleteAccountByUsernameAndHost:
+DELETE FROM accounts WHERE username = ? AND host = ?;
+
+-- Удаление всех аккаунтов
+deleteAllAccounts:
+DELETE FROM accounts;
+
+-- Проверка существования аккаунта
+existsAccount:
+SELECT EXISTS(
+    SELECT 1 FROM accounts WHERE id = ?
+);
+
+-- Проверка существования аккаунтов
+existsAccounts:
+SELECT EXISTS(
+    SELECT 1 FROM accounts
+);

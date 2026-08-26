@@ -1,0 +1,44 @@
+-- accounts/AccountsQueries.sq
+-- Получение основного аккаунта
+getMainAccount:
+SELECT * FROM accounts
+WHERE is_main = 1
+LIMIT 1;
+
+-- Получение всех аккаунтов с сортировкой по убыванию приоритета
+getAllAccountsSorted:
+SELECT * FROM accounts
+ORDER BY is_main DESC, created DESC;
+
+-- Получение аккаунтов с пагинацией
+getAccountsPaginated:
+SELECT * FROM accounts
+ORDER BY created DESC
+LIMIT ? OFFSET ?;
+
+-- Получение количества аккаунтов
+getAccountsCount:
+SELECT COUNT(*) FROM accounts;
+
+-- Получение количества аккаунтов на хосте
+getAccountsCountByHost:
+SELECT COUNT(*) FROM accounts
+WHERE host = ?;
+
+-- Получение уникальных хостов
+getUniqueHosts:
+SELECT DISTINCT host FROM accounts
+ORDER BY host;
+
+-- Поиск аккаунтов по части username (поиск с автодополнением)
+searchAccountsByUsername:
+SELECT * FROM accounts
+WHERE username LIKE '%' || ? || '%'
+ORDER BY username
+LIMIT ?;
+
+-- Получение последних добавленных аккаунтов
+getRecentAccounts:
+SELECT * FROM accounts
+ORDER BY created DESC
+LIMIT ?;

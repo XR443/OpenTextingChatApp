@@ -1,0 +1,35 @@
+-- messages/MessagesFilters.sq
+-- Получение по статусу
+getMessagesByStatus:
+SELECT * FROM messages
+WHERE status = ?
+ORDER BY created DESC;
+
+-- Получение по типу
+getMessagesByType:
+SELECT * FROM messages
+WHERE type = ?
+ORDER BY created DESC;
+
+-- Получение за период
+getMessagesBetweenTimestamps:
+SELECT * FROM messages
+WHERE created BETWEEN ? AND ?
+ORDER BY created DESC;
+
+-- Получение за последние N дней
+getMessagesLastDays:
+SELECT * FROM messages
+WHERE created >= ? - (? * 24 * 60 * 60 * 1000)
+ORDER BY created DESC;
+
+-- Получение по дате
+getMessagesByDate:
+SELECT * FROM messages
+WHERE created >= ? AND created < ? + 24 * 60 * 60 * 1000
+ORDER BY created DESC;
+
+-- Получение по ИД и автору
+getMessagesByIdAndAuthor:
+SELECT * FROM messages
+WHERE id IN ? AND account_id = ?;

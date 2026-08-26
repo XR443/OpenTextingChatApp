@@ -1,0 +1,30 @@
+-- messages/MessagesUpdates.sq
+-- Обновление статуса
+updateMessageStatus:
+UPDATE messages
+SET status = ?, updated = ?
+WHERE internal_id = ?;
+
+-- Обновление payload
+updateMessagePayload:
+UPDATE messages
+SET payload = ?, updated = ?
+WHERE internal_id = ?;
+
+-- Обновление payload, status по ид
+updateMessagePayloadWithStatus:
+UPDATE messages
+SET payload = ?, status = ?, updated = ?
+WHERE account_id = ? AND id = ?;
+
+-- Отметить как прочитанное
+markMessageAsRead:
+UPDATE messages
+SET status = 'READ'
+WHERE id IN ? AND account_id = ?;
+
+-- Отметить все от автора как прочитанные
+markMessagesAsReadFromAuthor:
+UPDATE messages
+SET status = 'READ', updated = ?
+WHERE recipient = ? AND author = ? AND status != 'READ';

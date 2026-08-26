@@ -1,0 +1,54 @@
+-- accounts/AccountsFilters.sq
+-- Получение аккаунтов по хосту
+getAccountsByHost:
+SELECT * FROM accounts
+WHERE host = ?
+ORDER BY username;
+
+-- Получение аккаунтов по хосту с пагинацией
+getAccountsByHostPaginated:
+SELECT * FROM accounts
+WHERE host = ?
+ORDER BY username
+LIMIT ? OFFSET ?;
+
+-- Получение аккаунтов с фильтром по хостам
+getAccountsByHosts:
+SELECT * FROM accounts
+WHERE host IN (?)
+ORDER BY host, username;
+
+-- Получение только основных аккаунтов
+getMainAccounts:
+SELECT * FROM accounts
+WHERE is_main = 1;
+
+-- Получение неосновных аккаунтов
+getNonMainAccounts:
+SELECT * FROM accounts
+WHERE is_main = 0;
+
+-- Получение аккаунтов по префиксу username (для автодополнения)
+getAccountsByUsernamePrefix:
+SELECT * FROM accounts
+WHERE username LIKE ? || '%'
+ORDER BY username
+LIMIT ?;
+
+-- Получение аккаунтов с сортировкой по дате создания
+getAccountsByDateRange:
+SELECT * FROM accounts
+WHERE created BETWEEN ? AND ?
+ORDER BY created DESC;
+
+-- Получение аккаунтов обновленных после определенной даты
+getAccountsUpdatedAfter:
+SELECT * FROM accounts
+WHERE updated > ?
+ORDER BY updated DESC;
+
+-- Получение старых аккаунтов (не обновлялись N дней)
+getStaleAccounts:
+SELECT * FROM accounts
+WHERE updated < ? - (? * 24 * 60 * 60 * 1000)
+ORDER BY updated ASC;
