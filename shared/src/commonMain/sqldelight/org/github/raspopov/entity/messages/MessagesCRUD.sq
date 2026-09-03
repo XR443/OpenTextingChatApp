@@ -2,8 +2,8 @@
 -- Вставка нового сообщения
 insertMessage:
 INSERT INTO messages (
-    id, account_id, internal_id, author, recipient, payload, type, status, created, updated
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    id, account_id, internal_id, author, recipient, payload, content_type, status, created, updated, payload_key
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- Получение сообщения по internal_id
 getMessageByInternalId:

@@ -1,16 +1,16 @@
 -- Создание таблицы сообщений
 CREATE TABLE IF NOT EXISTS messages (
-    id TEXT NOT NULL,                             -- Uuid
+    internal_id TEXT PRIMARY KEY,             -- Uuid
+    id TEXT,                             -- Uuid
     account_id TEXT NOT NULL,                     -- Uuid
-    internal_id TEXT NOT NULL UNIQUE,             -- Uuid
     author TEXT NOT NULL,                         -- Uuid
     recipient TEXT NOT NULL,                      -- Uuid
     payload BLOB,
-    type TEXT NOT NULL,                           -- Type enum: TEXT, IMAGE, AUDIO, VIDEO
+    content_type TEXT NOT NULL,                           -- Type enum: TEXT, IMAGE, AUDIO, VIDEO
     status TEXT NOT NULL,                         -- Status enum: SENDING, CONFIRMED, READ, UNKNOWN
     created INTEGER NOT NULL,                     -- Unix timestamp in milliseconds (Instant)
-    updated INTEGER NOT NULL,                      -- Unix timestamp in milliseconds (Instant)
-    PRIMARY KEY (id, account_id)
+    updated INTEGER NOT NULL,                      -- Unix timestamp in milliseconds (Instant),
+    payload_key BLOB
 );
 
 -- Индексы для оптимизации

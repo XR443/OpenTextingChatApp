@@ -1,4 +1,54 @@
 -- messages/MessagesFilters.sq
+-- Get messages between two users that are newer than the specified message
+getMessagesBetweenUsersBefore:
+SELECT *
+FROM messages
+WHERE account_id = ?
+    AND ((author = ? AND recipient = ?) OR (author = ? AND recipient = ?))
+    AND created > (
+        SELECT created
+        FROM messages
+        WHERE internal_id = ?
+        LIMIT 1
+    )
+ORDER BY created DESC
+LIMIT ?;
+
+-- Get messages between two users that are older than the specified message
+getMessagesBetweenUsersAfter:
+SELECT *
+FROM messages
+WHERE account_id = ?
+    AND ((author = ? AND recipient = ?) OR (author = ? AND recipient = ?))
+    AND created < (
+        SELECT created
+        FROM messages
+        WHERE internal_id = ?
+        LIMIT 1
+    )
+ORDER BY created DESC
+LIMIT ?;
+
+-- Get the latest messages between two users
+getLatestMessagesBetweenUsers:
+SELECT *
+FROM messages
+WHERE account_id = ?
+    AND ((author = ? AND recipient = ?) OR (author = ? AND recipient = ?))
+ORDER BY created DESC
+LIMIT ?;
+
+-- Get the first unread message between two users (newest to oldest)
+getFirstUnreadMessageBetweenUsers:
+SELECT *
+FROM messages
+WHERE account_id = ?
+    AND ((author = ? AND recipient = ?) OR (author = ? AND recipient = ?))
+    AND recipient = ?
+    AND status != 'read'
+ORDER BY created DESC
+LIMIT 1;
+
 -- Получение по статусу
 getMessagesByStatus:
 SELECT * FROM messages
@@ -8,7 +58,7 @@ ORDER BY created DESC;
 -- Получение по типу
 getMessagesByType:
 SELECT * FROM messages
-WHERE type = ?
+WHERE content_type = ?
 ORDER BY created DESC;
 
 -- Получение за период

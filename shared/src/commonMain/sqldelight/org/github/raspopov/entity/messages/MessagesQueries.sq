@@ -3,7 +3,8 @@
 getDialogMessages:
 SELECT * FROM messages
 WHERE account_id = ? AND ((author = ? AND recipient = ?) OR (author = ? AND recipient = ?))
-ORDER BY created DESC;
+ORDER BY created DESC
+LIMIT ? OFFSET ?;
 
 -- Получение последних N сообщений диалога
 getLastDialogMessages:

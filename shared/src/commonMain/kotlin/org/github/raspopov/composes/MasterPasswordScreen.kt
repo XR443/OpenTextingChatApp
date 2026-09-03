@@ -1,28 +1,47 @@
 package org.github.raspopov.composes
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import opentextingchatapp.shared.generated.resources.Res
-import opentextingchatapp.shared.generated.resources.compose_multiplatform
-import org.github.raspopov.composes.images.Default
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import org.github.raspopov.composes.images.Icons
 import org.github.raspopov.composes.images.icons.EyeClosed
 import org.github.raspopov.composes.images.icons.EyeOpened
-import org.github.raspopov.composes.images.icons.LeftArrow
 import org.github.raspopov.composes.images.icons.Lock
 import org.github.raspopov.domain.MasterKeys
-import org.github.raspopov.services.KeyDerivationService
+import org.github.raspopov.theme.DarkColorScheme
 import org.github.raspopov.views.MasterPasswordViewModel
-import org.jetbrains.compose.resources.vectorResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -35,30 +54,36 @@ fun MasterPasswordScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+    var runTask by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isConfirmMode by remember { mutableStateOf(false) }
+
+    val coroutineScope = rememberCoroutineScope()
 
     // Сервис должен быть injected через DI
     val masterPasswordViewModel = koinViewModel<MasterPasswordViewModel>()
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+            .padding(24.dp)
+            .background(color = DarkColorScheme.background),
+        horizontalAlignment = Alignment.CenterHorizontally,
+
+        ) {
         // Иконка замка
         Icon(
             Icons.Lock,
             contentDescription = null,
             modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.primary
+            tint = DarkColorScheme.primary
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             text = if (isConfirmMode) "Confirm Master Password" else title,
-            style = MaterialTheme.typography.headlineSmall
+            style = MaterialTheme.typography.headlineSmall,
+            color = DarkColorScheme.primary
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -96,7 +121,7 @@ fun MasterPasswordScreen(
         if (errorMessage != null) {
             Text(
                 text = errorMessage!!,
-                color = MaterialTheme.colorScheme.error,
+                color = DarkColorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -122,7 +147,7 @@ fun MasterPasswordScreen(
                     keyboardType = KeyboardType.Password
                 ),
                 isError = errorMessage != null,
-                enabled = !isLoading
+                enabled = !isLoading,
             )
         }
 
@@ -147,24 +172,32 @@ fun MasterPasswordScreen(
                 ) {
                     Text("Cancel")
                 }
-
+            // Запускаем операцию отдельно
+            LaunchedEffect(runTask) {
+                if (runTask) {
+                    runTask = false
+                    validateAndGenerateKeys(
+                        masterPassword = masterPassword,
+                        confirmPassword = confirmPassword,
+                        isConfirmMode = isConfirmMode,
+                        masterPasswordViewModel = masterPasswordViewModel,
+                        coroutineScope = coroutineScope,
+                        onSuccess = { keys ->
+                            onMasterKeyGenerated(keys)
+                            isLoading = false
+                        },
+                        onError = { error ->
+                            errorMessage = error
+                            isLoading = false
+                        }
+                    )
+                }
+            }
             Button(
                 onClick = {
                     isLoading = true
+                    runTask = true
                     try {
-                        validateAndGenerateKeys(
-                            masterPassword = masterPassword,
-                            confirmPassword = confirmPassword,
-                            isConfirmMode = isConfirmMode,
-                            masterPasswordViewModel = masterPasswordViewModel,
-                            onSuccess = { keys ->
-                                onMasterKeyGenerated(keys)
-                            },
-                            onError = { error ->
-                                errorMessage = error
-                                isLoading = false
-                            }
-                        )
                     } catch (e: Exception) {
                         errorMessage = e.message
                         isLoading = false
@@ -214,7 +247,7 @@ fun PasswordStrengthIndicator(password: String) {
                     .weight(1f)
                     .height(4.dp)
                     .background(
-                        MaterialTheme.colorScheme.surfaceVariant
+                        DarkColorScheme.surfaceVariant
                     )
             )
         }
@@ -234,6 +267,7 @@ private fun validateAndGenerateKeys(
     confirmPassword: String,
     isConfirmMode: Boolean,
     masterPasswordViewModel: MasterPasswordViewModel,
+    coroutineScope: CoroutineScope,
     onSuccess: (MasterKeys) -> Unit,
     onError: (String) -> Unit
 ) {
@@ -253,11 +287,12 @@ private fun validateAndGenerateKeys(
             return
         }
     }
-
-    try {
-        val keys = masterPasswordViewModel.onMasterPasswordEntered(masterPassword)
-        onSuccess(keys)
-    } catch (e: Exception) {
-        onError("Failed to generate keys: ${e.message}")
+    coroutineScope.launch {
+        try {
+            val keys = masterPasswordViewModel.onMasterPasswordEntered(masterPassword)
+            onSuccess(keys)
+        } catch (e: Exception) {
+            onError("Failed to generate keys: ${e.message}")
+        }
     }
 }

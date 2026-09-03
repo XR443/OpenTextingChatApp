@@ -162,7 +162,7 @@ class ObserverViewModel(
                     val notification =
                         json.decodeFromString<Notification>(readText)
 
-                    chatScreenViewModel.loadMessage(notification.message_from)
+                    chatScreenViewModel.loadNewMessages(notification.message_from)
                     chatListViewModel.loadChat(notification.message_from)
                 } catch (ex: Exception) {
                     when (ex) {

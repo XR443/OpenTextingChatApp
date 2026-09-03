@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DividerDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -28,18 +27,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import opentextingchatapp.shared.generated.resources.Res
-import opentextingchatapp.shared.generated.resources.compose_multiplatform
 import org.github.raspopov.composes.images.Icons
 import org.github.raspopov.composes.images.icons.Edit
-import org.github.raspopov.composes.images.icons.FileRemove
 import org.github.raspopov.composes.images.icons.Info
 import org.github.raspopov.composes.images.icons.LeftArrow
 import org.github.raspopov.composes.images.icons.Lock
 import org.github.raspopov.composes.images.icons.Person
-import org.github.raspopov.domain.AppSettings
+import org.github.raspopov.theme.DarkColorScheme
 import org.github.raspopov.views.SettingsViewModel
-import org.jetbrains.compose.resources.vectorResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -96,7 +91,7 @@ fun SettingsDrawer(
                             onCloseDrawer()
                         },
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = DarkColorScheme.surfaceVariant
                         )
                     ) {
                         Row(
@@ -110,7 +105,7 @@ fun SettingsDrawer(
                                 Icons.Person,
                                 contentDescription = "Аккаунты",
                                 modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = DarkColorScheme.primary
                             )
                             Text(
                                 text = "Аккаунты",
@@ -120,13 +115,13 @@ fun SettingsDrawer(
                             Text(
                                 text = "${accounts.size}",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = DarkColorScheme.onSurfaceVariant
                             )
                             Icon(
                                 Icons.Person,
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = DarkColorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -137,7 +132,7 @@ fun SettingsDrawer(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = DarkColorScheme.surfaceVariant
                         )
                     ) {
                         Row(
@@ -151,12 +146,12 @@ fun SettingsDrawer(
                                 Icons.Edit,
                                 contentDescription = "Настройки",
                                 modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = DarkColorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = "Настройки",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = DarkColorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -171,7 +166,7 @@ fun SettingsDrawer(
                             onCloseDrawer()
                         },
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = DarkColorScheme.surfaceVariant
                         )
                     ) {
                         Row(
@@ -185,12 +180,12 @@ fun SettingsDrawer(
                                 Icons.Lock,
                                 contentDescription = "Управление ключами",
                                 modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = DarkColorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = "Управление ключами",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = DarkColorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -200,7 +195,7 @@ fun SettingsDrawer(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = DarkColorScheme.surfaceVariant
                         )
                     ) {
                         Row(
@@ -214,12 +209,12 @@ fun SettingsDrawer(
                                 Icons.Info,
                                 contentDescription = "О программе",
                                 modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = DarkColorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = "О программе",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = DarkColorScheme.onSurfaceVariant
                             )
                         }
                     }

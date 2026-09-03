@@ -1,13 +1,39 @@
 package org.github.raspopov.composes
 
 // AccountsScreen.kt
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -23,6 +49,7 @@ import org.github.raspopov.composes.images.icons.Person
 import org.github.raspopov.composes.images.icons.PersonAdd
 import org.github.raspopov.composes.images.icons.PersonRemove
 import org.github.raspopov.domain.Account
+import org.github.raspopov.theme.DarkColorScheme
 import org.github.raspopov.views.LoadingViewModel
 import org.github.raspopov.views.MasterPasswordViewModel
 import org.github.raspopov.views.ObserverViewModel
@@ -108,17 +135,17 @@ fun AccountsScreen(
                             Icons.Person,
                             contentDescription = null,
                             modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = DarkColorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "Нет аккаунтов",
                             style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = DarkColorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "Нажмите кнопку + чтобы добавить",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = DarkColorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -217,10 +244,7 @@ fun AccountCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (account.isMain)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant
+            containerColor = DarkColorScheme.surfaceVariant
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -245,19 +269,19 @@ fun AccountCard(
                             text = account.username,
                             style = MaterialTheme.typography.titleMedium,
                             color = if (account.isMain)
-                                MaterialTheme.colorScheme.primary
+                                DarkColorScheme.primary
                             else
-                                MaterialTheme.colorScheme.onSurface
+                                DarkColorScheme.onSurface
                         )
                         if (account.isMain) {
                             Surface(
-                                color = MaterialTheme.colorScheme.primary,
+                                color = DarkColorScheme.primary,
                                 shape = MaterialTheme.shapes.small
                             ) {
                                 Text(
                                     text = "Основной",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    color = DarkColorScheme.onPrimary,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
@@ -269,13 +293,13 @@ fun AccountCard(
                     Text(
                         text = "Хост: ${account.host}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = DarkColorScheme.onSurfaceVariant
                     )
 
                     Text(
                         text = "Пароль: ${"•".repeat(account.password.size)}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = DarkColorScheme.onSurfaceVariant
                     )
                 }
 
@@ -346,7 +370,7 @@ fun AddAccountDialog(
         Text(
             text = if (isEditing) "✏️ Редактировать аккаунт" else "➕ Добавить аккаунт",
             style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface
+            color = DarkColorScheme.onSurface
         )
 
         // Поля ввода

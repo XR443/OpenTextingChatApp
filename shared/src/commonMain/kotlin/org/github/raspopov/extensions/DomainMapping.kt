@@ -4,9 +4,9 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.github.raspopov.domain.Account
+import org.github.raspopov.domain.ContentType
 import org.github.raspopov.domain.Message
 import org.github.raspopov.domain.Status
-import org.github.raspopov.domain.Type
 import org.github.raspopov.entity.Accounts
 import org.github.raspopov.entity.Messages
 import kotlin.jvm.JvmName
@@ -30,6 +30,7 @@ fun List<Accounts>.toDomain(): List<Account> {
         }
     }
 }
+
 @ExperimentalUuidApi
 @JvmName("accountToDomainSeq")
 fun Sequence<Accounts>.toDomain(): Sequence<Account> {
@@ -64,28 +65,20 @@ fun Sequence<Messages>.toDomain(): Sequence<Message> {
 @JvmName("messageToDomain")
 fun Messages.toDomain(): Message {
     return Message(
-        Uuid.parse(this.id),
+        this.id?.let { Uuid.parse(it) },
         Uuid.parse(this.internal_id),
         Uuid.parse(this.author),
         Uuid.parse(this.recipient),
         this.payload, // todo
-        mapType(this.type),
+        ContentType.fromFullType(this.content_type),
         mapStatus(this.status),
         convertUtcMillisToLocalDateTime(this.created),
-        convertUtcMillisToLocalDateTime(this.updated)
+        convertUtcMillisToLocalDateTime(this.updated),
+        payloadKey = payload_key
     )
 
 }
 
-internal fun mapType(type: String): Type {
-    return when (type.lowercase()) {
-        "text" -> Type.TEXT
-        "image" -> Type.IMAGE
-        "audio" -> Type.AUDIO
-        "video" -> Type.VIDEO
-        else -> Type.TEXT // default
-    }
-}
 
 internal fun mapStatus(status: String): Status {
     return when (status.lowercase()) {

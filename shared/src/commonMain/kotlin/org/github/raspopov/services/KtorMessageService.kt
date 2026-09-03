@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.accept
 import io.ktor.client.request.header
+import io.ktor.client.request.headers
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
@@ -19,12 +20,13 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.json.Json
+import org.github.raspopov.domain.ContentType
 import org.github.raspopov.domain.Message
 import org.github.raspopov.domain.Status
-import org.github.raspopov.domain.Type
 import org.github.raspopov.dto.EncryptedMessage
-import org.github.raspopov.dto.LimitDto
 import org.github.raspopov.dto.MessageDto
+import org.github.raspopov.dto.MessageQuery
 import org.github.raspopov.dto.MessagesDataDto
 import org.github.raspopov.services.platform.CryptoPlatform
 import org.github.raspopov.services.platform.E2eeCrypto
@@ -43,7 +45,6 @@ class KtorMessageService(
     private val messageCache: MessageCache,
     private val keysService: KeysService,
     private val masterPasswordViewModel: MasterPasswordViewModel,
-//    private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.Main),
 ) : MessageService {
 
     private val mainAccount
@@ -53,18 +54,20 @@ class KtorMessageService(
     private val masterKeys
         get() = masterPasswordViewModel.uiState.value.keys
 
-
-    // todo переделать чтоб не ходить каждый раз за токеном
     private suspend fun token(): String {
         return accountService.login(mainAccount)!!.token
+    }
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
     }
 
     override suspend fun create(
         text: String,
         to: Uuid
     ): Flow<Message> = flow {
-        // todo different message types
-        val url = "$baseUrl/messages/text/to/$to"
+        val url = "$baseUrl/messages/to/$to"
 
         val tokenVal = token()
         val trimmedText = text.trim()
@@ -79,32 +82,46 @@ class KtorMessageService(
 
         val response = client.post(url) {
             header(HttpHeaders.Authorization, "Bearer $tokenVal")
+            headers {
+                val contentType = ContentType.TEXT_ENCRYPTED // todo переделать
+
+                append("X-Content-Type", contentType.mimeType)
+                append("X-Encrypted", contentType.encrypted.toString())
+                if (contentType.compression != null) {
+                    append("X-Compression", contentType.compression.name)
+                }
+                if (contentType.quality != null) {
+                    append("X-Quality", contentType.quality.name)
+                }
+                if (!contentType.metadata.isNullOrEmpty()) {
+                    this["X-Metadata"] = json.encodeToString(contentType.metadata)
+                }
+            }
             contentType(Application.OctetStream)
-//            setBody(json.encodeToString(request))
-            // todo кодировки
             setBody(bytesToSend)
         }
 
         val messageDto = response.body<MessageDto>()
-        emit(mapToDomain(messageDto, bytesOfText))
+        val message = mapToDomain(messageDto, bytesToSend, to)
+        messageCache.update(message)
+        emit(message)
     }.flowOn(Dispatchers.Main)
 
-
-    override suspend fun findMessagesWithUser(
-        id: Uuid
-    ): Flow<List<Message>> = flow {
-        emit(getMessagesOfUserAndMy(id))
-        emit(findMessagesWithUser(id, LimitDto(0, 50)))
-    }.flowOn(Dispatchers.Main)
-
-    private suspend fun getMessagesOfUserAndMy(id: Uuid): List<Message> {
-        return messageCache.getMessageBetween(mainAccount.id, id)
+    private suspend fun getMessagesOfUserAndMy(id: Uuid, query: MessageQuery): List<Message> {
+        return messageCache.getMessageBetween(
+            mainAccount.id, id,
+            query.messageId, query.delta
+        )
     }
 
     private suspend fun findMessagesWithUser(
         userId: Uuid,
-        limit: LimitDto,
+        limit: MessageQuery,
     ): List<Message> {
+        if (masterKeys?.key == null)
+            return listOf()
+
+        //todo поиск по времени
         val infoUrl = "$baseUrl/messages/with/$userId"
 
         val tokenVal = token()
@@ -112,8 +129,7 @@ class KtorMessageService(
         val response = client.post(infoUrl) {
             header(HttpHeaders.Authorization, "Bearer $tokenVal")
             contentType(Application.Json)
-            if (limit.start != null)
-                setBody(limit)
+            setBody(limit)
         }
 
         val messages = response.body<List<MessageDto>>()
@@ -131,29 +147,24 @@ class KtorMessageService(
             if (bytes.isNotEmpty()) {
                 val parsed = parseMessages(bytes)
 
-                val masterKey = masterKeys?.key ?: return listOf()
                 val domainMessages = messages.map { m ->
                     mapToDomain(
                         m,
-                        parsed[m.id]!!.content.run {
-                            E2eeCrypto.decrypt(
-                                CryptoPlatform.decrypt(masterKey, mainAccount.privateKey!!),
-                                mainAccount.publicKey!!,
-                                keysService.getPublicKeyOf(userId),
-                                this
-                            )
-                        }
+                        parsed[m.id]!!.content,
+                        userId
                     )
                 }
                 messageCache.update(domainMessages)
             }
         }
-        return getMessagesOfUserAndMy(userId)
+        return messageCache.getMessageBetween(
+            mainAccount.id, userId,
+            limit.messageId,
+            limit.delta
+        )
+
     }
 
-    /**
-     * Парсинг байтового потока
-     */
     private fun parseMessages(data: ByteArray): Map<Uuid, EncryptedMessage> {
         val messages = mutableMapOf<Uuid, EncryptedMessage>()
         var offset = 0
@@ -162,17 +173,14 @@ class KtorMessageService(
             val startOffset = offset
 
             try {
-                // 1. Читаем UUID (16 байт)
                 val uuidBytes = data.copyOfRange(offset, offset + 16)
                 offset += 16
                 val uuid = Uuid.fromByteArray(uuidBytes)
 
-                // 2. Читаем размер (4 байта, знаковый int, big-endian)
                 val sizeBytes = data.copyOfRange(offset, offset + 4)
                 offset += 4
                 val msgSize = bytesToInt(sizeBytes)
 
-                // Проверяем валидность размера
                 if (msgSize < 0 || msgSize > 10 * 1024 * 1024) {
                     throw IllegalArgumentException("Invalid message size: $msgSize")
                 }
@@ -181,7 +189,6 @@ class KtorMessageService(
                     throw IllegalArgumentException("Incomplete message data")
                 }
 
-                // 3. Читаем сообщение
                 val content = data.copyOfRange(offset, offset + msgSize)
                 offset += msgSize
 
@@ -196,9 +203,6 @@ class KtorMessageService(
         return messages
     }
 
-    /**
-     * Конвертация 4 байт в Int (big-endian)
-     */
     private fun bytesToInt(bytes: ByteArray): Int {
         return ((bytes[0].toInt() and 0xFF) shl 24) or
                 ((bytes[1].toInt() and 0xFF) shl 16) or
@@ -207,26 +211,11 @@ class KtorMessageService(
     }
 
     override suspend fun findLastMessageWithUser(
-        id: Uuid
+        userId: Uuid
     ): Flow<Message?> = flow {
-        emit(getMessagesOfUserAndMy(id).maxByOrNull { it.created })
-        emit(findMessagesWithUser(id, LimitDto(0, 1)).maxByOrNull { it.created })
-    }.flowOn(Dispatchers.Main)
-
-    override suspend fun findMessagesWithUserFromNthMessagePlusDelta(
-        id: Uuid,
-        n: Int,
-        delta: Int
-    ): Flow<List<Message>> = flow {
-        val myMessages = messageCache.getMessagesAuthoredBy(mainAccount.id).asSequence()
-        val otherMessages = messageCache.getMessagesAuthoredBy(id).asSequence()
-        emit(
-            (myMessages + otherMessages)
-                .sortedByDescending { it.created }
-                .toList()
-                .subList(n, n + delta)
-        )
-        emit(findMessagesWithUser(id, LimitDto(n, delta)))
+        getMessagesAround(
+            userId, internalMessage = null, limit = 1
+        ).collect { emit(it.firstOrNull()) }
     }.flowOn(Dispatchers.Main)
 
     override suspend fun markMessageAsRead(
@@ -248,30 +237,57 @@ class KtorMessageService(
         emit(messages)
     }.flowOn(Dispatchers.Main)
 
+    override suspend fun getMessagesAround(
+        userId: Uuid,
+        internalMessage: Message?,
+        limit: Long
+    ): Flow<List<Message>> = flow {
+//        val cachedMessages = messageCache.getMessageBetween(
+//            mainAccount.id, userId,
+//            internalMessage?.internalId,
+//            limit
+//        )
+//        emit(cachedMessages)
+        val messages = findMessagesWithUser(
+            userId,
+            MessageQuery(messageId = internalMessage?.id, delta = 50)
+        )
+        emit(messages)
+    }.flowOn(Dispatchers.Main)
+
+    override suspend fun getMessagesAroundFirstUnread(
+        userId: Uuid,
+        limit: Long
+    ): Flow<List<Message>> = flow {
+        getMessagesAround(
+            userId, internalMessage = null, limit = limit
+        ).collect { emit(it) }
+    }.flowOn(Dispatchers.Main)
+
     // Приватный метод для маппинга DTO в доменную модель
-    private fun mapToDomain(dto: MessageDto, payload: ByteArray): Message {
+    private fun mapToDomain(dto: MessageDto, payload: ByteArray, userId: Uuid): Message {
+        val masterKey = masterKeys!!.key
+        val contentType = ContentType.fromFullType(dto.format)
+        val decryptedPayload = if (contentType.encrypted)
+            E2eeCrypto.decrypt(
+                CryptoPlatform.decrypt(masterKey, mainAccount.privateKey!!),
+                mainAccount.publicKey!!,
+                keysService.getPublicKeyOf(userId),
+                payload
+            ) else payload
         return Message(
             id = dto.id,
             internalId = Uuid.random(),
             author = dto.authorId,
             recipient = dto.recipientId,
-            payload = payload,
-            type = mapType(dto.payloadType),
+            payload = decryptedPayload,
+            contentType = contentType,
             status = mapStatus(dto.status),
             created = parseDateTime(dto.createdAt),
             updated = dto.updatedAt?.let { parseDateTime(it) } ?: Clock.System.now()
-                .toLocalDateTime(TimeZone.currentSystemDefault())
+                .toLocalDateTime(TimeZone.currentSystemDefault()),
+            null // todo encryption key of payload. if null use master key
         )
-    }
-
-    private fun mapType(payloadType: String): Type {
-        return when (payloadType.lowercase()) {
-            "text" -> Type.TEXT
-            "image" -> Type.IMAGE
-            "audio" -> Type.AUDIO
-            "video" -> Type.VIDEO
-            else -> Type.TEXT // default
-        }
     }
 
     private fun mapStatus(status: String): Status {

@@ -21,7 +21,7 @@ actual object CryptoPlatform {
             iterations,
             keyLength * 8 // в битах
         )
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512")
         return factory.generateSecret(spec).encoded
     }
 

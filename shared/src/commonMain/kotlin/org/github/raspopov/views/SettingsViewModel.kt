@@ -17,6 +17,12 @@ import org.github.raspopov.services.platform.E2eeCrypto
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+data class AppSettings(
+    val pageSize: Long = 100,
+) {
+
+}
+
 @ExperimentalUuidApi
 class SettingsViewModel(
     private val accountService: Lazy<AccountService>,
@@ -32,6 +38,9 @@ class SettingsViewModel(
 
     private val _mainAccount = MutableStateFlow<Account?>(null)
     val mainAccount: StateFlow<Account?> = _mainAccount.asStateFlow()
+
+    private val _appSettings = MutableStateFlow(AppSettings())
+    val appSettings: StateFlow<AppSettings> = _appSettings.asStateFlow()
 
     private val _isDrawerOpen = MutableStateFlow(false)
     val isDrawerOpen: StateFlow<Boolean> = _isDrawerOpen.asStateFlow()

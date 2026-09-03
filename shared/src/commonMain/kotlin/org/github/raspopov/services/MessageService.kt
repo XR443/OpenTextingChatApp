@@ -9,19 +9,21 @@ import kotlin.uuid.Uuid
 interface MessageService {
     suspend fun create(text: String, to: Uuid): Flow<Message>
 
-    suspend fun findMessagesWithUser(id: Uuid): Flow<List<Message>>
-
-    suspend fun findLastMessageWithUser(id: Uuid): Flow<Message?>
-
-    suspend fun findMessagesWithUserFromNthMessagePlusDelta(
-        id: Uuid,
-        n: Int,
-        delta: Int
-    ): Flow<List<Message>>
+    suspend fun findLastMessageWithUser(userId: Uuid): Flow<Message?>
 
     suspend fun markMessageAsRead(
         internalId: Uuid
     ): Flow<List<Message>>
 
-    // todo метод по поиску с датой
+    // Получение сообщений вокруг определенной даты
+    suspend fun getMessagesAround(
+        userId: Uuid,
+        internalMessage: Message?,
+        limit: Long
+    ): Flow<List<Message>>
+
+    suspend fun getMessagesAroundFirstUnread(
+        userId: Uuid,
+        limit: Long
+    ): Flow<List<Message>>
 }

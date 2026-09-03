@@ -7,7 +7,7 @@ import org.github.raspopov.services.platform.CryptoPlatform
 class KeyDerivationService {
 
     companion object {
-        const val ITERATIONS = 310_000 // Рекомендация OWASP (2024)
+        const val ITERATIONS = 150_000
         const val KEY_LENGTH = 32      // 256 бит
         const val SALT_LENGTH = 32     // 256 бит соли
     }
@@ -37,6 +37,7 @@ class KeyDerivationService {
         )
     }
 
+    // todo suspend функция
     fun generateMasterKeys(masterPassword: String, account: Account): MasterKeys {
         require(masterPassword.isNotBlank()) { "Master password cannot be empty" }
         // todo

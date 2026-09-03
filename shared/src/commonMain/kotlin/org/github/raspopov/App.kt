@@ -1,17 +1,18 @@
 package org.github.raspopov
 
+import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import io.ktor.util.reflect.instanceOf
 import org.github.raspopov.composes.AccountsScreen
-import org.github.raspopov.composes.AddPublicKeyContent
 import org.github.raspopov.composes.ChatList
 import org.github.raspopov.composes.ChatScreen
 import org.github.raspopov.composes.LoadingWindow
@@ -23,6 +24,7 @@ import org.github.raspopov.navigation.ChatScreenRoute
 import org.github.raspopov.navigation.MasterPasswordRoute
 import org.github.raspopov.navigation.PublicKeysScreenRoute
 import org.github.raspopov.navigation.config
+import org.github.raspopov.theme.DarkColorScheme
 import org.github.raspopov.views.ChatScreenViewModel
 import org.github.raspopov.views.LoadingViewModel
 import org.github.raspopov.views.MasterPasswordViewModel
@@ -70,81 +72,82 @@ fun App() {
         }
     }
 
-    MaterialTheme {
-        MaterialTheme {
-            NavDisplay(
-                backStack = backStack,
-                onBack = { backOrGoToMain() },
-                entryProvider = entryProvider {
-                    entry<ChatListRoute> {
-                        ChatList(
-                            onChatRowClick = { backStack.add(ChatScreenRoute(it)) },
-                            onToggleDrawer = { settingsViewModel.openDrawer() },
-                            onNavigateToAccounts = { backStack.add(AccountScreenRoute) },
-                            onNavigateToKeys = { backStack.add(PublicKeysScreenRoute) },
-                        )
-                    }
-                    entry<ChatScreenRoute> { key ->
-                        val chatScreenViewModel = koinViewModel<ChatScreenViewModel>()
-                        val openedChat = key.chat
-                        chatScreenViewModel.openChat(openedChat)
-                        ChatScreen(
-                            openedChat,
-                            onBack = { backOrGoToMain() },
-                        )
-                    }
-                    entry<AccountScreenRoute> { key ->
-                        masterPasswordViewModel.reset()
-                        AccountsScreen(
-                            onAddAccount = {
-                                if (!settingsViewModel.isHaveAccounts()) {
-                                    haveAccounts = true
-                                    settingsViewModel.closeDrawer()
-                                    backOrGoToMain()
-                                }
-                            },
-                            onUpdateAccount = {
-                            },
-                            onDeleteAccount = {
-                            },
-                            onSetMainAccount = {
-                            },
-                            onNavigateBack = {
-                                    backOrGoToMain()
-                            },
-                            haveAccounts
-                        )
-                    }
-                    entry<MasterPasswordRoute> { key ->
-                        val loadingViewModel = koinViewModel<LoadingViewModel>()
-
-                        LoadingWindow(
-                            loadingViewModel,
-//            modifier,
-                            content = {
-                                MasterPasswordScreen(
-                                    onMasterKeyGenerated = { keys ->
-                                        loadingViewModel.startLoading()
-                                        settingsViewModel.isHaveAccounts()
-                                        observerViewModel.runWatcher()
-                                        loadingViewModel.reset()
-                                        backOrGoToMain()
-                                    },
-                                    onCancel = {
-                                        // Выход из приложения или переход на экран входа
-                                    }
-                                )
-                            }
-
-                        )
-                    }
-                    entry<PublicKeysScreenRoute> { key ->
-                        PublicKeyManagerScreen(
-                            onNavigateBack = { backOrGoToMain() }
-                        )
-                    }
+    MaterialTheme(
+        colorScheme = DarkColorScheme
+    ) {
+        NavDisplay(
+            modifier = Modifier.background(DarkColorScheme.background),
+            backStack = backStack,
+            onBack = { backOrGoToMain() },
+            entryProvider = entryProvider {
+                entry<ChatListRoute> {
+                    ChatList(
+                        onChatRowClick = { backStack.add(ChatScreenRoute(it)) },
+                        onToggleDrawer = { settingsViewModel.openDrawer() },
+                        onNavigateToAccounts = { backStack.add(AccountScreenRoute) },
+                        onNavigateToKeys = { backStack.add(PublicKeysScreenRoute) },
+                    )
                 }
-            )
-        }
+                entry<ChatScreenRoute> { key ->
+                    val chatScreenViewModel = koinViewModel<ChatScreenViewModel>()
+                    val openedChat = key.chat
+                    chatScreenViewModel.openChat(openedChat)
+                    ChatScreen(
+                        openedChat,
+                        onBack = { backOrGoToMain() },
+                    )
+                }
+                entry<AccountScreenRoute> { key ->
+                    masterPasswordViewModel.reset()
+                    AccountsScreen(
+                        onAddAccount = {
+                            if (!settingsViewModel.isHaveAccounts()) {
+                                haveAccounts = true
+                                settingsViewModel.closeDrawer()
+                                backOrGoToMain()
+                            }
+                        },
+                        onUpdateAccount = {
+                        },
+                        onDeleteAccount = {
+                        },
+                        onSetMainAccount = {
+                        },
+                        onNavigateBack = {
+                            backOrGoToMain()
+                        },
+                        haveAccounts
+                    )
+                }
+                entry<MasterPasswordRoute> { key ->
+                    val loadingViewModel = koinViewModel<LoadingViewModel>()
+
+                    LoadingWindow(
+                        loadingViewModel,
+//                            Modifier.background(color = DarkColorScheme.primary),
+                        content = {
+                            MasterPasswordScreen(
+                                onMasterKeyGenerated = { keys ->
+                                    loadingViewModel.startLoading()
+                                    settingsViewModel.isHaveAccounts()
+                                    observerViewModel.runWatcher()
+                                    loadingViewModel.reset()
+                                    backOrGoToMain()
+                                },
+                                onCancel = {
+                                    // Выход из приложения или переход на экран входа
+                                }
+                            )
+                        }
+
+                    )
+                }
+                entry<PublicKeysScreenRoute> { key ->
+                    PublicKeyManagerScreen(
+                        onNavigateBack = { backOrGoToMain() }
+                    )
+                }
+            }
+        )
     }
 }

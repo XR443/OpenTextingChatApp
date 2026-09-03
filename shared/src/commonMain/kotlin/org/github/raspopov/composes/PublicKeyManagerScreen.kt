@@ -17,11 +17,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -52,6 +50,7 @@ import org.github.raspopov.composes.images.icons.Search
 import org.github.raspopov.composes.images.icons.XCirce
 import org.github.raspopov.domain.Chat
 import org.github.raspopov.extensions.toBase64
+import org.github.raspopov.theme.DarkColorScheme
 import org.github.raspopov.views.LoadingViewModel
 import org.github.raspopov.views.PublicKeysViewModel
 import org.github.raspopov.views.SettingsViewModel
@@ -152,7 +151,7 @@ fun PublicKeyManagerScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = DarkColorScheme.surfaceVariant
                 )
             ) {
                 Column(
@@ -163,12 +162,12 @@ fun PublicKeyManagerScreen(
                     Text(
                         text = "Сервер: ${mainAccount?.host ?: "не выбран"}",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = DarkColorScheme.onPrimaryContainer
                     )
                     Text(
                         text = "Мой ИД (${mainAccount?.username ?: "не выбран"})",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = DarkColorScheme.onPrimaryContainer,
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -181,7 +180,7 @@ fun PublicKeyManagerScreen(
                         Text(
                             text = mainAccount?.id?.toString() ?: "Не выбран",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            color = DarkColorScheme.onPrimaryContainer,
                             modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.MiddleEllipsis
@@ -206,7 +205,7 @@ fun PublicKeyManagerScreen(
                         Text(
                             text = "Мой публичный ключ (base64)",
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = DarkColorScheme.onPrimaryContainer
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -218,7 +217,7 @@ fun PublicKeyManagerScreen(
                             Text(
                                 text = myKey!!.toBase64(),
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = DarkColorScheme.onPrimaryContainer,
                                 modifier = Modifier.weight(1f),
                                 maxLines = 1,
                                 overflow = TextOverflow.MiddleEllipsis
@@ -287,8 +286,8 @@ fun PublicKeyManagerScreen(
                     }
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    focusedBorderColor = DarkColorScheme.primary.copy(alpha = 0.5f),
+                    unfocusedBorderColor = DarkColorScheme.outline.copy(alpha = 0.3f)
                 ),
                 textStyle = MaterialTheme.typography.bodySmall,
                 shape = MaterialTheme.shapes.small
@@ -306,7 +305,7 @@ fun PublicKeyManagerScreen(
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                containerColor = DarkColorScheme.surfaceVariant
                             )
                         ) {
                             Box(
@@ -321,7 +320,7 @@ fun PublicKeyManagerScreen(
                                     else
                                         "Нет добавленных ключей",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = DarkColorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -456,7 +455,7 @@ fun AddPublicKeyContent(
         if (errorMessage != null) {
             Text(
                 text = errorMessage ?: "",
-                color = MaterialTheme.colorScheme.error,
+                color = DarkColorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp)
             )
@@ -529,7 +528,7 @@ fun OtherPublicKeyItem(
                     text = keyEntry.second.decodeToString().take(50) +
                             if (keyEntry.second.decodeToString().length > 50) "..." else "",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = DarkColorScheme.onSurfaceVariant
                 )
             }
 

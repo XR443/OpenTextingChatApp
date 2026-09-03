@@ -35,16 +35,23 @@ internal class MessageDatabase(
     internal fun getMessageByInternalId(internalId: Uuid): Message {
         val internalIdStr = internalId.toString()
         return messagesCrud.getMessageByInternalId(internalIdStr)
-            .executeAsOne().toDomain()
-            .apply { payload = CryptoPlatform.decrypt(masterKeys!!.key, payload!!) }
+            .executeAsOne()
+            .toDomain()
+            .apply { decryptPayload() }
     }
 
 
-    internal fun getAllMessagesForUsers(author: Uuid, recipient: Uuid): List<Message> {
+    internal fun getAllMessagesForUsers(
+        author: Uuid,
+        recipient: Uuid,
+        offset: Long,
+        limit: Long
+    ): List<Message> {
         val authorStr = author.toString()
         val recipientStr = recipient.toString()
         return messagesQuery.getDialogMessages(
-            accountId, authorStr, recipientStr, recipientStr, authorStr
+            accountId, authorStr, recipientStr, recipientStr, authorStr,
+            limit, offset
         )
             .executeAsList()
             .toDomainList()
@@ -58,7 +65,6 @@ internal class MessageDatabase(
             .toDomainList()
 
     }
-
 
     internal fun updateMessage(message: Message) {
         val messageFromDb = messagesCrud.getMessageById(accountId, message.id.toString())
@@ -80,19 +86,23 @@ internal class MessageDatabase(
                 message.internalId.toString(),
                 message.author.toString(),
                 message.recipient.toString(),
-                CryptoPlatform.encrypt(masterKeys!!.key, message.payload!!),
-                message.type.toString(),
+                // todo прятать под ключ сообщения
+                if (message.contentType.encrypted) CryptoPlatform.encrypt(
+                    masterKeys!!.key,
+                    message.payload!!
+                ) else message.payload,
+                message.contentType.fullType,
                 message.status.toString(),
                 toTimestamp(message.created),
                 toTimestamp(message.updated),
+                message.payloadKey
             )
         }
     }
 
     private fun List<Messages>.toDomainList() = this.asSequence()
         .toDomain()
-        // todo работает только для текста
-        .map { it.apply { payload = CryptoPlatform.decrypt(masterKeys!!.key, payload!!) } }
+        .map { it.apply { decryptPayload() } }
         .toList()
 
     private fun toTimestamp(localDateTime: LocalDateTime?): Long {
@@ -108,6 +118,106 @@ internal class MessageDatabase(
         return messagesFilters.getMessagesByIdAndAuthor(ids, author)
             .executeAsList()
             .toDomainList()
+    }
+
+    fun getMessagesBetweenUsersBefore(
+        user1: Uuid,
+        user2: Uuid,
+        beforeMessageId: Uuid,
+        limit: Long,
+        accountId: Uuid
+    ): List<Message> {
+        val user1Str = user1.toString()
+        val user2Str = user2.toString()
+        val beforeMessageIdStr = beforeMessageId.toString()
+        val accountIdStr = accountId.toString()
+
+        return messagesFilters.getMessagesBetweenUsersBefore(
+            accountIdStr,
+            user1Str,
+            user2Str,
+            user2Str,
+            user1Str,
+            beforeMessageIdStr,
+            limit
+        ).executeAsList()
+            .toDomainList()
+    }
+
+    fun getMessagesBetweenUsersAfter(
+        user1: Uuid,
+        user2: Uuid,
+        afterMessageId: Uuid,
+        limit: Long,
+        accountId: Uuid
+    ): List<Message> {
+        val user1Str = user1.toString()
+        val user2Str = user2.toString()
+        val afterMessageIdStr = afterMessageId.toString()
+        val accountIdStr = accountId.toString()
+
+        return messagesFilters.getMessagesBetweenUsersAfter(
+            accountIdStr,
+            user1Str,
+            user2Str,
+            user2Str,
+            user1Str,
+            afterMessageIdStr,
+            limit
+        ).executeAsList()
+            .toDomainList()
+    }
+
+    fun getLatestMessagesBetweenUsers(
+        user1: Uuid,
+        user2: Uuid,
+        limit: Long,
+        accountId: Uuid
+    ): List<Message> {
+        val user1Str = user1.toString()
+        val user2Str = user2.toString()
+        val accountIdStr = accountId.toString()
+
+        return messagesFilters.getLatestMessagesBetweenUsers(
+            accountIdStr,
+            user1Str,
+            user2Str,
+            user2Str,
+            user1Str,
+            limit
+        ).executeAsList()
+            .toDomainList()
+    }
+
+    fun getFirstUnreadMessageBetweenUsers(
+        user1: Uuid,
+        user2: Uuid,
+        accountId: Uuid
+    ): Message? {
+        val user1Str = user1.toString()
+        val user2Str = user2.toString()
+        val accountIdStr = accountId.toString()
+
+        return messagesFilters.getFirstUnreadMessageBetweenUsers(
+            accountIdStr,
+            user1Str,
+            user2Str,
+            user2Str,
+            user1Str,
+            accountIdStr
+        ).executeAsOneOrNull()
+            ?.toDomain()
+            ?.apply { decryptPayload() }
+    }
+
+    private fun Message.decryptPayload() {
+        if (payloadKey != null) {
+            // todo need a password of chat
+            val payloadKeyDecrypted = CryptoPlatform.decrypt(masterKeys!!.key, payloadKey!!)
+            payload = CryptoPlatform.decrypt(payloadKeyDecrypted, payload!!)
+        } else {
+            payload = CryptoPlatform.decrypt(masterKeys!!.key, payload!!)
+        }
     }
 
 }
