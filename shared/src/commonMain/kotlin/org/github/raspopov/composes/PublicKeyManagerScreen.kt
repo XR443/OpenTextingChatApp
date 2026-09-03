@@ -1,5 +1,4 @@
 package org.github.raspopov.composes
-// MyPublicKeyScreen.kt - Common код
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,9 +16,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -36,17 +37,21 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import org.github.raspopov.composes.images.Icons
 import org.github.raspopov.composes.images.icons.Add
 import org.github.raspopov.composes.images.icons.Copy
+import org.github.raspopov.composes.images.icons.FileAdd
 import org.github.raspopov.composes.images.icons.FileRemove
 import org.github.raspopov.composes.images.icons.LeftArrow
 import org.github.raspopov.composes.images.icons.Search
+import org.github.raspopov.composes.images.icons.Upload
 import org.github.raspopov.composes.images.icons.XCirce
 import org.github.raspopov.domain.Chat
 import org.github.raspopov.extensions.toBase64
@@ -69,6 +74,10 @@ fun PublicKeyManagerScreen(
     val mainAccount by settingsViewModel.mainAccount.collectAsState()
     val myKey by publicKeyViewModel.mainAccountKey.collectAsState()
     val otherPublicKeys by publicKeyViewModel.otherKeys.collectAsState()
+
+    // Состояние для экспорта
+    var exportState by remember { mutableStateOf<ExportState>(ExportState.Idle) }
+    var showExportDialog by remember { mutableStateOf(false) }
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -93,7 +102,6 @@ fun PublicKeyManagerScreen(
 
         LoadingWindow(
             loadingViewModel,
-//            modifier,
             content = {
                 AddPublicKeyContent(
                     onDismiss = {
@@ -108,15 +116,145 @@ fun PublicKeyManagerScreen(
                     }
                 )
             }
-
         )
     }
+
+    val coroutineScope = rememberCoroutineScope()
+    // Диалог экспорта ключа
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showExportDialog = false
+                exportState = ExportState.Idle
+            },
+            title = {
+                Text("Экспорт ключа на сервер")
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Вы уверены, что хотите экспортировать ваш публичный ключ на сервер ${mainAccount?.host ?: "неизвестный"}?"
+                    )
+
+                    Text(
+                        text = "Ключ будет отправлен и сохранен на сервере для других пользователей.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DarkColorScheme.onSurfaceVariant
+                    )
+
+                    // Отображение статуса экспорта
+                    when (exportState) {
+                        ExportState.Loading -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Экспорт ключа...",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+
+                        ExportState.Success -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.FileAdd,
+                                    contentDescription = null,
+                                    tint = DarkColorScheme.primary,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Text(
+                                    text = "Ключ успешно экспортирован!",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = DarkColorScheme.primary
+                                )
+                            }
+                        }
+
+                        ExportState.Error -> {
+                            Text(
+                                text = "Ошибка при экспорте ключа. Попробуйте позже.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = DarkColorScheme.error
+                            )
+                        }
+
+                        ExportState.Idle -> {
+                            // Ничего не показываем
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (exportState == ExportState.Idle) {
+                    Button(
+                        onClick = {
+                            exportState = ExportState.Loading
+                            publicKeyViewModel.exportPublicKey(
+                                onSuccess = {
+                                    exportState = ExportState.Success
+                                    // Закрываем диалог через 2 секунды после успеха
+                                    coroutineScope.launch {
+                                        kotlinx.coroutines.delay(2000)
+                                        showExportDialog = false
+                                        exportState = ExportState.Idle
+                                    }
+                                },
+                                onError = {
+                                    exportState = ExportState.Error
+                                    // Возвращаем в Idle через 3 секунды
+                                    coroutineScope.launch {
+                                        kotlinx.coroutines.delay(3000)
+                                        exportState = ExportState.Idle
+                                    }
+                                }
+                            )
+                        },
+                        enabled = myKey != null
+                    ) {
+                        Text("Экспортировать")
+                    }
+                } else {
+                    // Кнопка для закрытия в состоянии успеха/ошибки
+                    Button(
+                        onClick = {
+                            showExportDialog = false
+                            exportState = ExportState.Idle
+                        }
+                    ) {
+                        Text(if (exportState == ExportState.Success) "Готово" else "Закрыть")
+                    }
+                }
+            },
+            dismissButton = {
+                if (exportState == ExportState.Idle || exportState == ExportState.Error) {
+                    TextButton(
+                        onClick = {
+                            showExportDialog = false
+                            exportState = ExportState.Idle
+                        }
+                    ) {
+                        Text("Отмена")
+                    }
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Управление аккаунтами") },
                 navigationIcon = {
-//                    IconButton(onClick = onNavigateBack) {
                     IconButton(
                         onClick = onNavigateBack,
                         enabled = true
@@ -129,7 +267,6 @@ fun PublicKeyManagerScreen(
                 },
                 actions = {
                     IconButton(onClick = { showAddDialog = true }) {
-//                        Icon(Icons.Default.Add, contentDescription = "Добавить")
                         Icon(
                             Icons.Add,
                             contentDescription = "Добавить"
@@ -145,8 +282,7 @@ fun PublicKeyManagerScreen(
                 .padding(paddingValues.plus(PaddingValues(16.dp)))
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
-        )
-        {
+        ) {
             // Секция: Мой публичный ключ
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -159,11 +295,43 @@ fun PublicKeyManagerScreen(
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    Text(
-                        text = "Сервер: ${mainAccount?.host ?: "не выбран"}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = DarkColorScheme.onPrimaryContainer
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Сервер: ${mainAccount?.host ?: "не выбран"}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = DarkColorScheme.onPrimaryContainer
+                        )
+
+                        // КНОПКА ЭКСПОРТА
+                        Button(
+                            onClick = {
+                                if (myKey != null) {
+                                    showExportDialog = true
+                                } else {
+                                    // Показать сообщение, что ключ не найден
+                                    publicKeyViewModel.showToast("Публичный ключ не найден")
+                                }
+                            },
+                            enabled = myKey != null,
+                            modifier = Modifier.size(height = 36.dp, width = 120.dp)
+                        ) {
+                            Icon(
+                                Icons.Upload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.size(4.dp))
+                            Text(
+                                text = "Экспорт",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+
                     Text(
                         text = "Мой ИД (${mainAccount?.username ?: "не выбран"})",
                         style = MaterialTheme.typography.titleMedium,
@@ -252,7 +420,7 @@ fun PublicKeyManagerScreen(
                 )
             }
 
-            // Поле поиска (компактное)
+            // Поле поиска
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -375,25 +543,25 @@ fun AddPublicKeyContent(
             FilterChip(
                 selected = searchMode == SearchMode.ID,
                 onClick = {
-                        searchMode = SearchMode.ID
-                        userId = ""
-                        username = ""
-                        errorMessage = null
+                    searchMode = SearchMode.ID
+                    userId = ""
+                    username = ""
+                    errorMessage = null
                 },
                 label = { Text("По ID") },
-                enabled = false,
+                enabled = true,
                 modifier = Modifier.weight(1f)
             )
             FilterChip(
                 selected = searchMode == SearchMode.NAME,
                 onClick = {
-                        searchMode = SearchMode.NAME
-                        userId = ""
-                        username = ""
-                        errorMessage = null
+                    searchMode = SearchMode.NAME
+                    userId = ""
+                    username = ""
+                    errorMessage = null
                 },
                 label = { Text("По имени") },
-                enabled = false,
+                enabled = true,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -404,8 +572,8 @@ fun AddPublicKeyContent(
                 OutlinedTextField(
                     value = userId,
                     onValueChange = {
-                            userId = it
-                            errorMessage = null
+                        userId = it
+                        errorMessage = null
                     },
                     label = { Text("ID пользователя") },
                     modifier = Modifier.fillMaxWidth(),
@@ -413,13 +581,12 @@ fun AddPublicKeyContent(
                     enabled = true
                 )
             }
-
             SearchMode.NAME -> {
                 OutlinedTextField(
                     value = username,
                     onValueChange = {
-                            username = it
-                            errorMessage = null
+                        username = it
+                        errorMessage = null
                     },
                     label = { Text("Имя пользователя") },
                     modifier = Modifier.fillMaxWidth(),
@@ -441,8 +608,8 @@ fun AddPublicKeyContent(
         OutlinedTextField(
             value = pubkey,
             onValueChange = {
-                    pubkey = it
-                    errorMessage = null
+                pubkey = it
+                errorMessage = null
             },
             label = { Text("Публичный ключ (base64)") },
             modifier = Modifier.fillMaxWidth(),
@@ -466,7 +633,6 @@ fun AddPublicKeyContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Кнопка "Отмена"
             TextButton(
                 onClick = onDismiss,
                 enabled = true,
@@ -475,7 +641,6 @@ fun AddPublicKeyContent(
                 Text("Отмена")
             }
 
-            // Кнопка "Добавить"
             Button(
                 onClick = {
                     val idToUse = when (searchMode) {
@@ -544,4 +709,12 @@ fun OtherPublicKeyItem(
 
 enum class SearchMode {
     ID, NAME
+}
+
+// Состояния для экспорта
+sealed class ExportState {
+    object Idle : ExportState()
+    object Loading : ExportState()
+    object Success : ExportState()
+    object Error : ExportState()
 }

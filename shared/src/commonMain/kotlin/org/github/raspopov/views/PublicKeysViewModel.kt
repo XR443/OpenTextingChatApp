@@ -2,7 +2,6 @@ package org.github.raspopov.views
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,7 +12,6 @@ import org.github.raspopov.extensions.fromBase64
 import org.github.raspopov.services.AccountService
 import org.github.raspopov.services.KeysService
 import org.github.raspopov.services.platform.ClipboardManager
-import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -63,5 +61,24 @@ class PublicKeysViewModel(
             keysService.addKeyFor(Uuid.parse(id), mainId, info.username, pubkeyBytes)
             callback()
         }
+    }
+    fun exportPublicKey(onSuccess: () -> Unit, onError: () -> Unit) {
+        // Логика экспорта ключа на сервер
+        viewModelScope.launch {
+            try {
+                val result = keysService.uploadPublicKey()
+                if (result) {
+                    onSuccess()
+                } else {
+                    onError()
+                }
+            } catch (e: Exception) {
+                onError()
+            }
+        }
+    }
+
+    fun showToast(message: String) {
+        // Показать Toast сообщение
     }
 }
