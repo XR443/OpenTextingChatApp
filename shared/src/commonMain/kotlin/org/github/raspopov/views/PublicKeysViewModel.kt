@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.github.raspopov.domain.Chat
+import org.github.raspopov.dto.PublicKeyInfo
 import org.github.raspopov.extensions.fromBase64
 import org.github.raspopov.services.AccountService
 import org.github.raspopov.services.KeysService
@@ -22,6 +23,12 @@ class PublicKeysViewModel(
     private val masterPasswordViewModel: MasterPasswordViewModel,
     private val settingsViewModel: SettingsViewModel,
 ) : ViewModel() {
+
+    private val _searchResults = MutableStateFlow<List<PublicKeyInfo>>(emptyList())
+    val searchResults: StateFlow<List<PublicKeyInfo>> = _searchResults.asStateFlow()
+
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
     private val _otherKeys = MutableStateFlow<List<Pair<Chat, ByteArray>>>(listOf())
     val otherKeys = _otherKeys.asStateFlow()
@@ -62,6 +69,7 @@ class PublicKeysViewModel(
             callback()
         }
     }
+
     fun exportPublicKey(onSuccess: () -> Unit, onError: () -> Unit) {
         // Логика экспорта ключа на сервер
         viewModelScope.launch {
@@ -80,5 +88,45 @@ class PublicKeysViewModel(
 
     fun showToast(message: String) {
         // Показать Toast сообщение
+    }
+
+
+    // Поиск пользователей с ключами на сервере
+    fun searchUsersWithKeys(username: String) {
+        viewModelScope.launch {
+            _isSearching.value = true
+            try {
+                val results = keysService.searchUsersWithKeys(username)
+                _searchResults.value = results
+            } catch (e: Exception) {
+                _searchResults.value = emptyList()
+            } finally {
+                _isSearching.value = false
+            }
+        }
+    }
+
+    fun clearSearchResults() {
+        _searchResults.value = emptyList()
+    }
+
+    // Импорт ключа с сервера
+    fun importPublicKey(
+        userId: Uuid,
+        username: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val publicKeyOf = keysService.loadPublicKeyOf(userId)
+                // Добавляем ключ в локальное хранилище
+                val mainId = settingsViewModel.mainAccount.value!!.id
+                keysService.addKeyFor(userId, mainId, username, publicKeyOf)
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.message ?: "Unknown error")
+            }
+        }
     }
 }

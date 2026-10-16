@@ -50,10 +50,13 @@ import org.github.raspopov.composes.images.icons.Copy
 import org.github.raspopov.composes.images.icons.FileAdd
 import org.github.raspopov.composes.images.icons.FileRemove
 import org.github.raspopov.composes.images.icons.LeftArrow
+import org.github.raspopov.composes.images.icons.Person
+import org.github.raspopov.composes.images.icons.PersonAdd
 import org.github.raspopov.composes.images.icons.Search
 import org.github.raspopov.composes.images.icons.Upload
 import org.github.raspopov.composes.images.icons.XCirce
 import org.github.raspopov.domain.Chat
+import org.github.raspopov.dto.PublicKeyInfo
 import org.github.raspopov.extensions.toBase64
 import org.github.raspopov.theme.DarkColorScheme
 import org.github.raspopov.views.LoadingViewModel
@@ -74,12 +77,20 @@ fun PublicKeyManagerScreen(
     val mainAccount by settingsViewModel.mainAccount.collectAsState()
     val myKey by publicKeyViewModel.mainAccountKey.collectAsState()
     val otherPublicKeys by publicKeyViewModel.otherKeys.collectAsState()
+    val searchResults by publicKeyViewModel.searchResults.collectAsState()
+    val isSearching by publicKeyViewModel.isSearching.collectAsState()
 
     // Состояние для экспорта
     var exportState by remember { mutableStateOf<ExportState>(ExportState.Idle) }
     var showExportDialog by remember { mutableStateOf(false) }
 
     var showAddDialog by remember { mutableStateOf(false) }
+
+    // Состояние для поиска на сервере
+    var serverSearchQuery by remember { mutableStateOf("") }
+    var showServerSearchResults by remember { mutableStateOf(false) }
+    var importState by remember { mutableStateOf<ImportState>(ImportState.Idle) }
+    var selectedUserForImport by remember { mutableStateOf<PublicKeyInfo?>(null) }
 
     // Состояния для поиска
     var searchQuery by remember { mutableStateOf("") }
@@ -96,7 +107,7 @@ fun PublicKeyManagerScreen(
         }
     }
 
-    // Диалог добавления ключа
+    // Диалог добавления ключа (старый способ)
     if (showAddDialog) {
         val loadingViewModel = koinViewModel<LoadingViewModel>()
 
@@ -144,7 +155,6 @@ fun PublicKeyManagerScreen(
                         color = DarkColorScheme.onSurfaceVariant
                     )
 
-                    // Отображение статуса экспорта
                     when (exportState) {
                         ExportState.Loading -> {
                             Row(
@@ -160,7 +170,6 @@ fun PublicKeyManagerScreen(
                                 )
                             }
                         }
-
                         ExportState.Success -> {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -179,7 +188,6 @@ fun PublicKeyManagerScreen(
                                 )
                             }
                         }
-
                         ExportState.Error -> {
                             Text(
                                 text = "Ошибка при экспорте ключа. Попробуйте позже.",
@@ -187,7 +195,6 @@ fun PublicKeyManagerScreen(
                                 color = DarkColorScheme.error
                             )
                         }
-
                         ExportState.Idle -> {
                             // Ничего не показываем
                         }
@@ -224,7 +231,6 @@ fun PublicKeyManagerScreen(
                         Text("Экспортировать")
                     }
                 } else {
-                    // Кнопка для закрытия в состоянии успеха/ошибки
                     Button(
                         onClick = {
                             showExportDialog = false
@@ -250,6 +256,207 @@ fun PublicKeyManagerScreen(
         )
     }
 
+    // Диалог результатов поиска на сервере
+    if (showServerSearchResults) {
+        AlertDialog(
+            onDismissRequest = {
+                showServerSearchResults = false
+                serverSearchQuery = ""
+                importState = ImportState.Idle
+                selectedUserForImport = null
+            },
+            title = {
+                Text("Результаты поиска")
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Поле поиска
+                    OutlinedTextField(
+                        value = serverSearchQuery,
+                        onValueChange = {
+                            serverSearchQuery = it
+                            if (it.length >= 2) {
+                                publicKeyViewModel.searchUsersWithKeys(it)
+                            }
+                        },
+                        label = { Text("Поиск по имени") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        leadingIcon = {
+                            Icon(
+                                Icons.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            if (serverSearchQuery.isNotBlank()) {
+                                IconButton(
+                                    onClick = {
+                                        serverSearchQuery = ""
+                                        publicKeyViewModel.clearSearchResults()
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        Icons.XCirce,
+                                        contentDescription = "Очистить",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    )
+
+                    // Список результатов
+                    if (isSearching) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    } else if (searchResults.isEmpty() && serverSearchQuery.isNotBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Пользователи с ключами не найдены",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = DarkColorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .height(300.dp)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(searchResults) { userInfo ->
+                                SearchResultItem(
+                                    userInfo = userInfo,
+                                    isAlreadyAdded = otherPublicKeys.any {
+                                        it.first.userId == userInfo.userId
+                                    },
+                                    onImport = {
+                                        selectedUserForImport = userInfo
+                                        importState = ImportState.Loading
+
+                                        publicKeyViewModel.importPublicKey(
+                                            userId = userInfo.userId,
+                                            username = userInfo.username,
+                                            onSuccess = {
+                                                importState = ImportState.Success
+                                                publicKeyViewModel.showToast("Ключ успешно импортирован")
+                                                coroutineScope.launch {
+                                                    kotlinx.coroutines.delay(1500)
+                                                    showServerSearchResults = false
+                                                    importState = ImportState.Idle
+                                                    selectedUserForImport = null
+                                                    serverSearchQuery = ""
+                                                    publicKeyViewModel.clearSearchResults()
+                                                    publicKeyViewModel.loadKeys() // Обновляем список
+                                                }
+                                            },
+                                            onError = { error ->
+                                                importState = ImportState.Error
+                                                publicKeyViewModel.showToast("Ошибка импорта: $error")
+                                            }
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Статус импорта
+                    when (importState) {
+                        ImportState.Loading -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Импорт ключа...",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+
+                        ImportState.Success -> {
+//                            Row(
+//                                verticalAlignment = Alignment.CenterVertically,
+//                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+//                            ) {
+//                                Icon(
+//                                    Icons.Search,
+//                                    contentDescription = null,
+//                                    tint = DarkColorScheme.primary
+//                                )
+//                                Text(
+//                                    text = "Ключ успешно импортирован!",
+//                                    style = MaterialTheme.typography.bodyMedium,
+//                                    color = DarkColorScheme.primary
+//                                )
+//                            }
+                        }
+
+                        ImportState.Error -> {
+//                            Text(
+//                                text = "Ошибка при импорте ключа",
+//                                style = MaterialTheme.typography.bodyMedium,
+//                                color = DarkColorScheme.error
+//                            )
+                        }
+
+                        ImportState.Idle -> {}
+                    }
+                }
+            },
+            confirmButton = {
+                if (importState == ImportState.Success || importState == ImportState.Error) {
+                    Button(
+                        onClick = {
+                            showServerSearchResults = false
+                            importState = ImportState.Idle
+                            selectedUserForImport = null
+                            serverSearchQuery = ""
+                            publicKeyViewModel.clearSearchResults()
+                        }
+                    ) {
+                        Text("Готово")
+                    }
+                }
+            },
+            dismissButton = {
+                if (importState == ImportState.Idle || importState == ImportState.Error) {
+                    TextButton(
+                        onClick = {
+                            showServerSearchResults = false
+                            importState = ImportState.Idle
+                            selectedUserForImport = null
+                            serverSearchQuery = ""
+                            publicKeyViewModel.clearSearchResults()
+                        }
+                    ) {
+                        Text("Закрыть")
+                    }
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -266,10 +473,22 @@ fun PublicKeyManagerScreen(
                     }
                 },
                 actions = {
+                    // Кнопка поиска на сервере
+                    IconButton(
+                        onClick = {
+                            showServerSearchResults = true
+                            publicKeyViewModel.clearSearchResults()
+                        }
+                    ) {
+                        Icon(
+                            Icons.PersonAdd,
+                            contentDescription = "Поиск на сервере"
+                        )
+                    }
                     IconButton(onClick = { showAddDialog = true }) {
                         Icon(
                             Icons.Add,
-                            contentDescription = "Добавить"
+                            contentDescription = "Добавить вручную"
                         )
                     }
                 }
@@ -306,13 +525,11 @@ fun PublicKeyManagerScreen(
                             color = DarkColorScheme.onPrimaryContainer
                         )
 
-                        // КНОПКА ЭКСПОРТА
                         Button(
                             onClick = {
                                 if (myKey != null) {
                                     showExportDialog = true
                                 } else {
-                                    // Показать сообщение, что ключ не найден
                                     publicKeyViewModel.showToast("Публичный ключ не найден")
                                 }
                             },
@@ -408,7 +625,7 @@ fun PublicKeyManagerScreen(
                 }
             }
 
-            // Заголовок списка с кнопкой добавления
+            // Заголовок списка
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -420,7 +637,7 @@ fun PublicKeyManagerScreen(
                 )
             }
 
-            // Поле поиска
+            // Поле поиска (локальный)
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -507,6 +724,80 @@ fun PublicKeyManagerScreen(
 }
 
 @Composable
+fun SearchResultItem(
+    userInfo: PublicKeyInfo,
+    isAlreadyAdded: Boolean,
+    onImport: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isAlreadyAdded)
+                DarkColorScheme.surfaceVariant.copy(alpha = 0.5f)
+            else DarkColorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = DarkColorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = userInfo.username,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
+                Text(
+                    text = "ID: ${userInfo.userId}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DarkColorScheme.onSurfaceVariant
+                )
+            }
+
+            if (isAlreadyAdded) {
+                Text(
+                    text = "Добавлен",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DarkColorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp)
+                )
+            } else {
+                Button(
+                    onClick = onImport,
+                    modifier = Modifier.size(height = 32.dp, width = 110.dp)
+                ) {
+                    Icon(
+                        Icons.Upload,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.size(4.dp))
+                    Text(
+                        text = "Импорт",
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun AddPublicKeyContent(
     onDismiss: () -> Unit,
     onAdd: (userId: String, username: String, pubkey: String) -> Unit,
@@ -528,14 +819,12 @@ fun AddPublicKeyContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Заголовок
         Text(
             text = "Добавить ключ пользователя",
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.fillMaxWidth()
         )
 
-        // Toggle режима поиска
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -566,7 +855,6 @@ fun AddPublicKeyContent(
             )
         }
 
-        // Поля ввода в зависимости от режима
         when (searchMode) {
             SearchMode.ID -> {
                 OutlinedTextField(
@@ -618,7 +906,6 @@ fun AddPublicKeyContent(
             enabled = true
         )
 
-        // Отображение ошибки если есть
         if (errorMessage != null) {
             Text(
                 text = errorMessage ?: "",
@@ -628,7 +915,6 @@ fun AddPublicKeyContent(
             )
         }
 
-        // Кнопки действий
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -690,8 +976,7 @@ fun OtherPublicKeyItem(
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
-                    text = keyEntry.second.decodeToString().take(50) +
-                            if (keyEntry.second.decodeToString().length > 50) "..." else "",
+                    text = keyEntry.second.toBase64(),
                     style = MaterialTheme.typography.bodySmall,
                     color = DarkColorScheme.onSurfaceVariant
                 )
@@ -711,10 +996,16 @@ enum class SearchMode {
     ID, NAME
 }
 
-// Состояния для экспорта
 sealed class ExportState {
     object Idle : ExportState()
     object Loading : ExportState()
     object Success : ExportState()
     object Error : ExportState()
+}
+
+sealed class ImportState {
+    object Idle : ImportState()
+    object Loading : ImportState()
+    object Success : ImportState()
+    object Error : ImportState()
 }

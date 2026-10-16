@@ -174,7 +174,7 @@ fun ChatRow(chat: Chat, onClick: (() -> Unit) = {}, modifier: Modifier = Modifie
                 horizontalArrangement = Arrangement.Start
             ) {
                 val hasUnread = !(lastMessage?.isRead ?: true)
-                if (hasUnread) {
+                if (hasUnread && !settingsViewModel.isMy(lastMessage)) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier

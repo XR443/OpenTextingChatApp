@@ -1,10 +1,6 @@
 package org.github.raspopov.services
 
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.http.HttpHeaders
 import kotlinx.serialization.json.Json
 import org.github.raspopov.domain.Chat
 import org.github.raspopov.dto.UserInfoDto
@@ -30,16 +26,16 @@ class KtorChatService(
         get() = settings.mainAccount.value!!.host
 
     override suspend fun getChats(): List<Chat> {
-        if (!settings.isHaveAccounts())
+        if (settings.mainAccount.value == null)
             return emptyList()
 
-        val url = "$baseUrl/chats/"
-
-        val tokenVal = accountService.login()?.token ?: return listOf()
-
-        val response = client.get(url) {
-            header(HttpHeaders.Authorization, "Bearer $tokenVal")
-        }
+//        val url = "$baseUrl/chats/"
+//
+//        val tokenVal = accountService.login()?.token ?: return listOf()
+//
+//        val response = client.get(url) {
+//            header(HttpHeaders.Authorization, "Bearer $tokenVal")
+//        }
 
 //        val userInfo = response.body<List<UserInfoDto>>()
         val userInfo = listOf<UserInfoDto>()

@@ -54,8 +54,8 @@ class KtorMessageService(
     private val masterKeys
         get() = masterPasswordViewModel.uiState.value.keys
 
-    private suspend fun token(): String {
-        return accountService.login(mainAccount)!!.token
+    private suspend fun token(): String? {
+        return accountService.login(mainAccount)?.token
     }
 
     private val json = Json {
@@ -63,48 +63,147 @@ class KtorMessageService(
         isLenient = true
     }
 
+    override suspend fun sendUnsent() {
+        var messages: List<Message> = messageCache.getUnsent(mainAccount.id)
+        while (messages.isNotEmpty()) {
+            for (messageToSend in messages) {
+                send(messageToSend)
+            }
+            messages = messageCache.getUnsent(mainAccount.id)
+        }
+    }
+
+    override suspend fun send(message: Message): Message {
+        val url = "$baseUrl/messages/to/${message.recipient}"
+
+        val contentType = message.contentType
+
+        val tokenVal = token() ?: return message
+        try {
+            val masterKey = masterKeys!!.key
+            val bytesToSend = E2eeCrypto.encrypt(
+                CryptoPlatform.decrypt(masterKey, mainAccount.privateKey!!),
+                mainAccount.publicKey!!,
+                keysService.getPublicKeyOf(message.recipient),
+                message.payload!!
+            )
+
+
+            val response = client.post(url) {
+                header(HttpHeaders.Authorization, "Bearer $tokenVal")
+                headers {
+                    append("X-Content-Type", contentType.mimeType)
+                    append("X-Encrypted", contentType.encrypted.toString())
+                    if (contentType.compression != null) {
+                        append("X-Compression", contentType.compression.name)
+                    }
+                    if (contentType.quality != null) {
+                        append("X-Quality", contentType.quality.name)
+                    }
+                    if (!contentType.metadata.isNullOrEmpty()) {
+                        this["X-Metadata"] = json.encodeToString(contentType.metadata)
+                    }
+                }
+                contentType(Application.OctetStream)
+                setBody(bytesToSend)
+            }
+
+            val messageDto = response.body<MessageDto>()
+            val mappedMessage = mapToDomain(
+                messageDto,
+                bytesToSend,
+                messageDto.recipientId,
+                message.internalId
+            )
+            if (mappedMessage != null) {
+                messageCache.update(mappedMessage)
+                return mappedMessage
+            }
+        } catch (e: Exception) {
+            println("Exception was threw while trying to resend messages ${e.message}")
+        }
+
+        return message
+    }
+
     override suspend fun create(
         text: String,
         to: Uuid
-    ): Flow<Message> = flow {
+    ): Flow<Message?> = flow {
         val url = "$baseUrl/messages/to/$to"
 
-        val tokenVal = token()
         val trimmedText = text.trim()
-        val bytesOfText = trimmedText.toByteArray(Charsets.UTF_8)
-        val masterKey = masterKeys!!.key
-        val bytesToSend = E2eeCrypto.encrypt(
-            CryptoPlatform.decrypt(masterKey, mainAccount.privateKey!!),
-            mainAccount.publicKey!!,
-            keysService.getPublicKeyOf(to),
-            bytesOfText
-        )
 
-        val response = client.post(url) {
-            header(HttpHeaders.Authorization, "Bearer $tokenVal")
-            headers {
-                val contentType = ContentType.TEXT_ENCRYPTED // todo переделать
-
-                append("X-Content-Type", contentType.mimeType)
-                append("X-Encrypted", contentType.encrypted.toString())
-                if (contentType.compression != null) {
-                    append("X-Compression", contentType.compression.name)
-                }
-                if (contentType.quality != null) {
-                    append("X-Quality", contentType.quality.name)
-                }
-                if (!contentType.metadata.isNullOrEmpty()) {
-                    this["X-Metadata"] = json.encodeToString(contentType.metadata)
-                }
-            }
-            contentType(Application.OctetStream)
-            setBody(bytesToSend)
+        if (trimmedText.isEmpty()) {
+            emit(null)
+            return@flow
         }
 
-        val messageDto = response.body<MessageDto>()
-        val message = mapToDomain(messageDto, bytesToSend, to)
-        messageCache.update(message)
-        emit(message)
+        sendUnsent()
+
+        val bytesOfText = trimmedText.toByteArray(Charsets.UTF_8)
+        val contentType = ContentType.TEXT_ENCRYPTED // todo переделать
+
+        val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+        var message: Message? = Message(
+            id = null,
+            internalId = Uuid.random(),
+            author = mainAccount.id,
+            recipient = to,
+            payload = bytesOfText,
+            contentType = contentType,
+            status = Status.SENDING,
+            created = now,
+            updated = now,
+            null // todo encryption key of payload. if null use master key
+        )
+        messageCache.update(message!!)
+
+        val tokenVal = token()
+        if (tokenVal == null) {
+            emit(message)
+        } else {
+            val masterKey = masterKeys!!.key
+            val bytesToSend = E2eeCrypto.encrypt(
+                CryptoPlatform.decrypt(masterKey, mainAccount.privateKey!!),
+                mainAccount.publicKey!!,
+                keysService.getPublicKeyOf(to),
+                bytesOfText
+            )
+
+            try {
+                val response = client.post(url) {
+                    header(HttpHeaders.Authorization, "Bearer $tokenVal")
+                    headers {
+                        append("X-Content-Type", contentType.mimeType)
+                        append("X-Encrypted", contentType.encrypted.toString())
+                        if (contentType.compression != null) {
+                            append("X-Compression", contentType.compression.name)
+                        }
+                        if (contentType.quality != null) {
+                            append("X-Quality", contentType.quality.name)
+                        }
+                        if (!contentType.metadata.isNullOrEmpty()) {
+                            this["X-Metadata"] = json.encodeToString(contentType.metadata)
+                        }
+                    }
+                    contentType(Application.OctetStream)
+                    setBody(bytesToSend)
+                }
+
+                val messageDto = response.body<MessageDto>()
+                message = mapToDomain(messageDto, bytesToSend, to, message.internalId)
+                if (message == null) {
+                    emit(null)
+                } else {
+                    messageCache.update(message)
+                    emit(message)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emit(message)
+            }
+        }
     }.flowOn(Dispatchers.Main)
 
     private suspend fun getMessagesOfUserAndMy(id: Uuid, query: MessageQuery): List<Message> {
@@ -121,10 +220,12 @@ class KtorMessageService(
         if (masterKeys?.key == null)
             return listOf()
 
+        sendUnsent()
+
         //todo поиск по времени
         val infoUrl = "$baseUrl/messages/with/$userId"
 
-        val tokenVal = token()
+        val tokenVal = token() ?: return listOf()
 
         val response = client.post(infoUrl) {
             header(HttpHeaders.Authorization, "Bearer $tokenVal")
@@ -147,7 +248,7 @@ class KtorMessageService(
             if (bytes.isNotEmpty()) {
                 val parsed = parseMessages(bytes)
 
-                val domainMessages = messages.map { m ->
+                val domainMessages: List<Message> = messages.mapNotNull { m ->
                     mapToDomain(
                         m,
                         parsed[m.id]!!.content,
@@ -226,15 +327,19 @@ class KtorMessageService(
 
         val tokenVal = token()
 
-        val response = client.post(url) {
-            header(HttpHeaders.Authorization, "Bearer $tokenVal")
-            contentType(Application.Json)
-        }
+        if (tokenVal == null) {
+            emit(listOf())
+        } else {
+            val response = client.post(url) {
+                header(HttpHeaders.Authorization, "Bearer $tokenVal")
+                contentType(Application.Json)
+            }
 
-        val messageDto = response.body<List<MessageDto>>()
-        val messageIds = messageDto.map { it.id }
-        val messages = messageCache.markRead(messageIds)
-        emit(messages)
+            val messageDto = response.body<List<MessageDto>>()
+            val messageIds = messageDto.map { it.id }
+            val messages = messageCache.markRead(messageIds)
+            emit(messages)
+        }
     }.flowOn(Dispatchers.Main)
 
     override suspend fun getMessagesAround(
@@ -265,8 +370,13 @@ class KtorMessageService(
     }.flowOn(Dispatchers.Main)
 
     // Приватный метод для маппинга DTO в доменную модель
-    private fun mapToDomain(dto: MessageDto, payload: ByteArray, userId: Uuid): Message {
-        val masterKey = masterKeys!!.key
+    private fun mapToDomain(
+        dto: MessageDto,
+        payload: ByteArray,
+        userId: Uuid,
+        internalId: Uuid = Uuid.fromLongs(0, 0)
+    ): Message? {
+        val masterKey = masterKeys?.key ?: return null
         val contentType = ContentType.fromFullType(dto.format)
         val decryptedPayload = if (contentType.encrypted)
             E2eeCrypto.decrypt(
@@ -277,7 +387,7 @@ class KtorMessageService(
             ) else payload
         return Message(
             id = dto.id,
-            internalId = Uuid.random(),
+            internalId = internalId,
             author = dto.authorId,
             recipient = dto.recipientId,
             payload = decryptedPayload,

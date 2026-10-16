@@ -45,10 +45,17 @@ class SettingsViewModel(
     private val _isDrawerOpen = MutableStateFlow(false)
     val isDrawerOpen: StateFlow<Boolean> = _isDrawerOpen.asStateFlow()
 
+    private var onAccountsUpdate: (List<Account>) -> Unit = {}
+
     fun isHaveAccounts(): Boolean {
         val existentAccounts = accountDatabase.getAccounts()
         _mainAccount.update { existentAccounts.find { it.isMain } }
         _accounts.update { existentAccounts }
+
+        viewModelScope.launch {
+            onAccountsUpdate(existentAccounts)
+        }
+
         return existentAccounts.isNotEmpty()
     }
 
@@ -104,6 +111,10 @@ class SettingsViewModel(
 
     fun isMy(message: Message): Boolean {
         return mainAccount.value?.id == message.author
+    }
+
+    fun onAccountsUpdate(function: (List<Account>) -> Unit) {
+        onAccountsUpdate = function
     }
 }
 

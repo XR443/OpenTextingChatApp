@@ -14,7 +14,6 @@ import io.ktor.http.formUrlEncode
 import kotlinx.serialization.json.Json
 import org.github.raspopov.cache.AccountDatabase
 import org.github.raspopov.cache.DatabaseDriverFactory
-import org.github.raspopov.cache.PublicKeysDatabase
 import org.github.raspopov.domain.Account
 import org.github.raspopov.domain.MasterKeys
 import org.github.raspopov.dto.AccessTokenDto
@@ -47,25 +46,32 @@ class KtorAccountService(
         get() = masterPasswordViewModel.uiState.value.keys
 
     override suspend fun login(): AccessTokenDto? {
-        return login(settings.mainAccount.value!!)
+        val account = settings.mainAccount.value ?: return null
+        return login(account)
     }
 
     override suspend fun login(account: Account): AccessTokenDto? {
         if (masterKeys == null)
             return null
-        val response = client.post("${account.host}/token") {
-            contentType(Application.FormUrlEncoded)
-            setBody(
-                listOf(
-                    "username" to account.username,
-                    "password" to CryptoPlatform.decrypt(masterKeys!!.key, account.password)
-                        .decodeToString()
-                ).formUrlEncode()
-            )
-        }
-        if (response.status != HttpStatusCode.OK)
+        try {
+            val response = client.post("${account.host}/token") {
+                contentType(Application.FormUrlEncoded)
+                setBody(
+                    listOf(
+                        "username" to account.username,
+                        "password" to CryptoPlatform.decrypt(masterKeys!!.key, account.password)
+                            .decodeToString()
+                    ).formUrlEncode()
+                )
+            }
+            if (response.status != HttpStatusCode.OK)
+                return null
+            return response.body<AccessTokenDto>()
+        } catch (e: Exception) {
+//            e.printStackTrace()
+            println("Exception was threw while trying to get token ${e.message}")
             return null
-        return response.body<AccessTokenDto>()
+        }
     }
 
     override suspend fun login(

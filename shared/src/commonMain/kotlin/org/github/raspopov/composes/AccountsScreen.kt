@@ -70,6 +70,9 @@ fun AccountsScreen(
     backButtonEnabled: Boolean
 ) {
     val settingsViewModel = koinViewModel<SettingsViewModel>()
+
+    settingsViewModel.isHaveAccounts()
+
     val masterPasswordViewModel = koinViewModel<MasterPasswordViewModel>()
     val observerViewModel = koinViewModel<ObserverViewModel>()
 

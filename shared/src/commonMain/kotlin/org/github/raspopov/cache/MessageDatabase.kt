@@ -33,11 +33,12 @@ internal class MessageDatabase(
         get() = settingsViewModel.mainAccount.value!!.id.toString()
 
     internal fun getMessageByInternalId(internalId: Uuid): Message {
+        val masterKey = masterKeys!!.key
         val internalIdStr = internalId.toString()
         return messagesCrud.getMessageByInternalId(internalIdStr)
             .executeAsOne()
             .toDomain()
-            .apply { decryptPayload() }
+            .apply { decryptPayload(this, masterKey) }
     }
 
 
@@ -47,6 +48,7 @@ internal class MessageDatabase(
         offset: Long,
         limit: Long
     ): List<Message> {
+        val masterKey = masterKeys?.key ?: return listOf()
         val authorStr = author.toString()
         val recipientStr = recipient.toString()
         return messagesQuery.getDialogMessages(
@@ -54,41 +56,48 @@ internal class MessageDatabase(
             limit, offset
         )
             .executeAsList()
-            .toDomainList()
+            .toDomainList(masterKey)
     }
 
 
     internal fun getAllMessagesAuthoredBy(author: Uuid): List<Message> {
+        val masterKey = masterKeys?.key ?: return listOf()
         val authorStr = author.toString()
         return messagesQuery.getMessagesAuthoredByUser(accountId, authorStr)
             .executeAsList()
-            .toDomainList()
+            .toDomainList(masterKey)
 
     }
 
     internal fun updateMessage(message: Message) {
-        val messageFromDb = messagesCrud.getMessageById(accountId, message.id.toString())
-            .executeAsOneOrNull()
+        val masterKey = masterKeys?.key ?: return
+
+        val messageFromDb =
+            messagesCrud.getMessageByInternalId(message.internalId.toString())
+                .executeAsOneOrNull()
+                ?: messagesCrud.getMessageById(accountId, message.id.toString())
+                    .executeAsOneOrNull()
 
         if (messageFromDb != null) {
             val payload = message.payload ?: messageFromDb.payload
             messagesUpdates.updateMessagePayloadWithStatus(
-                CryptoPlatform.encrypt(masterKeys!!.key, payload!!),
+                message.id?.toString(),
+                CryptoPlatform.encrypt(masterKey, payload!!),
                 message.status.toString(),
                 toTimestamp(message.updated),
-                accountId, message.id.toString()
+                accountId, messageFromDb.internal_id
             )
         } else {
             // todo
             messagesCrud.insertMessage(
-                message.id.toString(),
+                message.id?.toString(),
                 accountId,
                 message.internalId.toString(),
                 message.author.toString(),
                 message.recipient.toString(),
                 // todo прятать под ключ сообщения
                 if (message.contentType.encrypted) CryptoPlatform.encrypt(
-                    masterKeys!!.key,
+                    masterKey,
                     message.payload!!
                 ) else message.payload,
                 message.contentType.fullType,
@@ -100,9 +109,9 @@ internal class MessageDatabase(
         }
     }
 
-    private fun List<Messages>.toDomainList() = this.asSequence()
+    private fun List<Messages>.toDomainList(masterKey: ByteArray) = this.asSequence()
         .toDomain()
-        .map { it.apply { decryptPayload() } }
+        .map { it.apply { decryptPayload(this, masterKey) } }
         .toList()
 
     private fun toTimestamp(localDateTime: LocalDateTime?): Long {
@@ -112,12 +121,13 @@ internal class MessageDatabase(
     }
 
     fun markRead(messageIds: List<Uuid>, mainId: Uuid): List<Message> {
+        val masterKey = masterKeys?.key ?: return listOf()
         val author = mainId.toString()
         val ids = messageIds.map { it.toString() }
         messagesUpdates.markMessageAsRead(ids, author)
         return messagesFilters.getMessagesByIdAndAuthor(ids, author)
             .executeAsList()
-            .toDomainList()
+            .toDomainList(masterKey)
     }
 
     fun getMessagesBetweenUsersBefore(
@@ -127,6 +137,7 @@ internal class MessageDatabase(
         limit: Long,
         accountId: Uuid
     ): List<Message> {
+        val masterKey = masterKeys?.key ?: return listOf()
         val user1Str = user1.toString()
         val user2Str = user2.toString()
         val beforeMessageIdStr = beforeMessageId.toString()
@@ -141,7 +152,7 @@ internal class MessageDatabase(
             beforeMessageIdStr,
             limit
         ).executeAsList()
-            .toDomainList()
+            .toDomainList(masterKey)
     }
 
     fun getMessagesBetweenUsersAfter(
@@ -151,6 +162,7 @@ internal class MessageDatabase(
         limit: Long,
         accountId: Uuid
     ): List<Message> {
+        val masterKey = masterKeys?.key ?: return listOf()
         val user1Str = user1.toString()
         val user2Str = user2.toString()
         val afterMessageIdStr = afterMessageId.toString()
@@ -165,7 +177,7 @@ internal class MessageDatabase(
             afterMessageIdStr,
             limit
         ).executeAsList()
-            .toDomainList()
+            .toDomainList(masterKey)
     }
 
     fun getLatestMessagesBetweenUsers(
@@ -174,6 +186,7 @@ internal class MessageDatabase(
         limit: Long,
         accountId: Uuid
     ): List<Message> {
+        val masterKey = masterKeys?.key ?: return listOf()
         val user1Str = user1.toString()
         val user2Str = user2.toString()
         val accountIdStr = accountId.toString()
@@ -186,7 +199,7 @@ internal class MessageDatabase(
             user1Str,
             limit
         ).executeAsList()
-            .toDomainList()
+            .toDomainList(masterKey)
     }
 
     fun getFirstUnreadMessageBetweenUsers(
@@ -194,6 +207,8 @@ internal class MessageDatabase(
         user2: Uuid,
         accountId: Uuid
     ): Message? {
+        val masterKey = masterKeys?.key ?: return null
+
         val user1Str = user1.toString()
         val user2Str = user2.toString()
         val accountIdStr = accountId.toString()
@@ -207,17 +222,29 @@ internal class MessageDatabase(
             accountIdStr
         ).executeAsOneOrNull()
             ?.toDomain()
-            ?.apply { decryptPayload() }
+            ?.apply { decryptPayload(this, masterKey) }
     }
 
-    private fun Message.decryptPayload() {
-        if (payloadKey != null) {
+    private fun decryptPayload(message: Message, masterKey: ByteArray) {
+        if (message.payloadKey != null) {
             // todo need a password of chat
-            val payloadKeyDecrypted = CryptoPlatform.decrypt(masterKeys!!.key, payloadKey!!)
-            payload = CryptoPlatform.decrypt(payloadKeyDecrypted, payload!!)
+            val payloadKeyDecrypted = CryptoPlatform.decrypt(masterKey, message.payloadKey!!)
+            message.payload = CryptoPlatform.decrypt(payloadKeyDecrypted, message.payload!!)
         } else {
-            payload = CryptoPlatform.decrypt(masterKeys!!.key, payload!!)
+            message.payload = CryptoPlatform.decrypt(masterKey, message.payload!!)
         }
+    }
+
+    fun getUnsent(user1: Uuid): List<Message> {
+        val masterKey = masterKeys?.key ?: return listOf()
+        val user1Str = user1.toString()
+
+        return messagesQuery.getUnsent(
+            user1Str,
+            user1Str,
+            25
+        ).executeAsList()
+            .toDomainList(masterKey)
     }
 
 }

@@ -94,6 +94,12 @@ class DbMessageCacheImpl(
         }
     }
 
+    override fun getUnsent(
+        user1: Uuid
+    ): List<Message> {
+        return messageDatabase.getUnsent(user1)
+    }
+
     override fun update(messages: List<Message>) {
         messages.forEach { update(it) }
     }

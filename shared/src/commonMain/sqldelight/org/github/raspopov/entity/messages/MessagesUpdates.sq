@@ -14,8 +14,8 @@ WHERE internal_id = ?;
 -- Обновление payload, status по ид
 updateMessagePayloadWithStatus:
 UPDATE messages
-SET payload = ?, status = ?, updated = ?
-WHERE account_id = ? AND id = ?;
+SET id = ?, payload = ?, status = ?, updated = ?
+WHERE account_id = ? AND internal_id = ?;
 
 -- Отметить как прочитанное
 markMessageAsRead:
