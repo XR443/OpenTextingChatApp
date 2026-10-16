@@ -22,6 +22,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.Json
 import org.github.raspopov.domain.ContentType
+import org.github.raspopov.domain.Extra
 import org.github.raspopov.domain.Message
 import org.github.raspopov.domain.Status
 import org.github.raspopov.dto.EncryptedMessage
@@ -88,7 +89,6 @@ class KtorMessageService(
                 message.payload!!
             )
 
-
             val response = client.post(url) {
                 header(HttpHeaders.Authorization, "Bearer $tokenVal")
                 headers {
@@ -102,6 +102,9 @@ class KtorMessageService(
                     }
                     if (!contentType.metadata.isNullOrEmpty()) {
                         this["X-Metadata"] = json.encodeToString(contentType.metadata)
+                    }
+                    if (contentType.extraParams.isNotEmpty()) {
+                        this["X-Extra-Params"] = json.encodeToString(contentType.extraParams)
                     }
                 }
                 contentType(Application.OctetStream)
@@ -128,7 +131,8 @@ class KtorMessageService(
 
     override suspend fun create(
         text: String,
-        to: Uuid
+        to: Uuid,
+        replyMessage: Message?
     ): Flow<Message?> = flow {
         val url = "$baseUrl/messages/to/$to"
 
@@ -142,10 +146,10 @@ class KtorMessageService(
         sendUnsent()
 
         val bytesOfText = trimmedText.toByteArray(Charsets.UTF_8)
-        val contentType = ContentType.TEXT_ENCRYPTED // todo переделать
+        val contentType = ContentType.textEncrypted(extraParams = Extra.reply(replyMessage))
 
         val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-        var message: Message? = Message(
+        val message = Message(
             id = null,
             internalId = Uuid.random(),
             author = mainAccount.id,
@@ -156,54 +160,13 @@ class KtorMessageService(
             created = now,
             updated = now,
             null // todo encryption key of payload. if null use master key
-        )
-        messageCache.update(message!!)
+        ).apply { replied = replyMessage }
+        messageCache.update(message)
 
-        val tokenVal = token()
-        if (tokenVal == null) {
-            emit(message)
-        } else {
-            val masterKey = masterKeys!!.key
-            val bytesToSend = E2eeCrypto.encrypt(
-                CryptoPlatform.decrypt(masterKey, mainAccount.privateKey!!),
-                mainAccount.publicKey!!,
-                keysService.getPublicKeyOf(to),
-                bytesOfText
-            )
+        val sent = send(message)
 
-            try {
-                val response = client.post(url) {
-                    header(HttpHeaders.Authorization, "Bearer $tokenVal")
-                    headers {
-                        append("X-Content-Type", contentType.mimeType)
-                        append("X-Encrypted", contentType.encrypted.toString())
-                        if (contentType.compression != null) {
-                            append("X-Compression", contentType.compression.name)
-                        }
-                        if (contentType.quality != null) {
-                            append("X-Quality", contentType.quality.name)
-                        }
-                        if (!contentType.metadata.isNullOrEmpty()) {
-                            this["X-Metadata"] = json.encodeToString(contentType.metadata)
-                        }
-                    }
-                    contentType(Application.OctetStream)
-                    setBody(bytesToSend)
-                }
-
-                val messageDto = response.body<MessageDto>()
-                message = mapToDomain(messageDto, bytesToSend, to, message.internalId)
-                if (message == null) {
-                    emit(null)
-                } else {
-                    messageCache.update(message)
-                    emit(message)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                emit(message)
-            }
-        }
+        sent.replied = replyMessage
+        emit(sent)
     }.flowOn(Dispatchers.Main)
 
     private suspend fun getMessagesOfUserAndMy(id: Uuid, query: MessageQuery): List<Message> {

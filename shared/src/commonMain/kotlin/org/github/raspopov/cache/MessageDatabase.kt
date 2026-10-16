@@ -110,9 +110,18 @@ internal class MessageDatabase(
     }
 
     private fun List<Messages>.toDomainList(masterKey: ByteArray) = this.asSequence()
-        .toDomain()
+        .toDomain({ findReply(it) })
         .map { it.apply { decryptPayload(this, masterKey) } }
         .toList()
+
+    private fun findReply(replyId: String?): Message? {
+        if (replyId == null) return null
+        val masterKey = masterKeys?.key ?: return null
+        val accountId = settingsViewModel.mainAccount.value?.id ?: return null
+        val accountIdStr = accountId.toString()
+        return messagesQuery.getRepliedMessage(accountIdStr, replyId)
+            .executeAsOneOrNull()?.toDomain()?.apply { decryptPayload(this, masterKey) }
+    }
 
     private fun toTimestamp(localDateTime: LocalDateTime?): Long {
         val instant = localDateTime?.toInstant(TimeZone.currentSystemDefault())

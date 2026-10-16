@@ -6,6 +6,12 @@ WHERE account_id = ? AND ((author = ? AND recipient = ?) OR (author = ? AND reci
 ORDER BY created DESC
 LIMIT ? OFFSET ?;
 
+-- Получение сообщения по ид для аккаунта
+getRepliedMessage:
+SELECT * FROM messages
+WHERE account_id = ? AND id = ?
+LIMIT 1;
+
 -- Получение последних N сообщений диалога
 getLastDialogMessages:
 SELECT * FROM messages

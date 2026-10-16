@@ -9,7 +9,7 @@ import kotlin.uuid.Uuid
 interface MessageService {
     suspend fun sendUnsent()
     suspend fun send(message: Message): Message
-    suspend fun create(text: String, to: Uuid): Flow<Message?>
+    suspend fun create(text: String, to: Uuid, replyMessage: Message? = null): Flow<Message?>
 
     suspend fun findLastMessageWithUser(userId: Uuid): Flow<Message?>
 

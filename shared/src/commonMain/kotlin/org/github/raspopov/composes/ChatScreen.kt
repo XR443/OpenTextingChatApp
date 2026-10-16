@@ -1,16 +1,21 @@
 package org.github.raspopov.composes
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -50,6 +56,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,6 +72,7 @@ import org.github.raspopov.composes.images.icons.LeftArrow
 import org.github.raspopov.composes.images.icons.MailRead
 import org.github.raspopov.composes.images.icons.MailUnread
 import org.github.raspopov.composes.images.icons.Upload
+import org.github.raspopov.composes.images.icons.XCirce
 import org.github.raspopov.domain.Chat
 import org.github.raspopov.domain.Message
 import org.github.raspopov.extensions.FormatPatterns
@@ -116,6 +124,8 @@ fun ChatScreen(
     var isReady by remember { mutableStateOf(false) }
 
     val loadingState by chatScreenViewModel.loadingState.collectAsState()
+
+    val repliedMessageState by chatScreenViewModel.repliedMessage.collectAsState()
 
     // Инициализация чата
     LaunchedEffect(Unit) {
@@ -305,7 +315,8 @@ fun ChatScreen(
                             )
                         }
                         MessageItem(
-                            message = message, isMyMessage = settingsViewModel.isMy(message)
+                            message = message, isMyMessage = settingsViewModel.isMy(message),
+                            onReplyClick = { chatScreenViewModel.replyTo(it) }
                         )
                     }
 
@@ -324,6 +335,13 @@ fun ChatScreen(
                     }
                 }
 
+                // Превью ответа над полем ввода
+                repliedMessageState?.let { replied ->
+                    ReplyPreview(
+                        message = replied,
+                        onCancel = { chatScreenViewModel.replyTo(null) }
+                    )
+                }
                 MessageInputFieldWithAttachment(
                     onSendMessage = { it ->
                         chatScreenViewModel.addMessage(it) {
@@ -395,6 +413,50 @@ fun ChatScreen(
 }
 
 @Composable
+fun ReplyPreview(
+    message: Message,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = DarkColorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(36.dp)
+                    .background(DarkColorScheme.primary, RoundedCornerShape(2.dp))
+            )
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Ответ на сообщение",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = DarkColorScheme.primary
+                )
+                Text(
+                    text = message.payload?.decodeToString().orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = DarkColorScheme.onSurface.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            IconButton(onClick = onCancel, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.XCirce, contentDescription = "Отменить ответ")
+            }
+        }
+    }
+}
+
+@Composable
 fun TopPanel(chat: Chat, modifier: Modifier = Modifier, onBack: () -> Unit = {}) {
     CenterAlignedTopAppBar(
         title = {
@@ -419,7 +481,7 @@ fun TopPanelPreview() {
 
 @Composable
 fun MessageItem(
-    message: Message, isMyMessage: Boolean
+    message: Message, isMyMessage: Boolean, onReplyClick: (Message) -> Unit = {}
 ) {
     // Вариант 1: Использование Row с выравниванием
     Row(
@@ -431,13 +493,13 @@ fun MessageItem(
             Arrangement.Start  // Чужие слева
         }
     ) {
-        MessageBubble(message, isMyMessage)
+        MessageBubble(message, isMyMessage, onReplyClick)
     }
 }
 
 @Composable
 fun MessageBubble(
-    message: Message, isMyMessage: Boolean
+    message: Message, isMyMessage: Boolean, onReplyClick: (Message) -> Unit = {}
 ) {
     val shape = if (isMyMessage) {
         // Мои сообщения - скругление справа
@@ -451,7 +513,6 @@ fun MessageBubble(
         )
     }
 
-
     Box(
         modifier = Modifier.widthIn(max = 280.dp)  // todo Максимальная ширина сообщения
             .background(
@@ -462,8 +523,21 @@ fun MessageBubble(
             ).padding(
                 horizontal = 12.dp, vertical = 8.dp
             )
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { onReplyClick(message) }
+            )
     ) {
         Column {
+            // === Цитата сообщения, на которое отвечаем ===
+            message.replied?.let { reply ->
+                ReplyQuote(
+                    reply = reply,
+                    isMyMessage = isMyMessage,
+//                    onClick = { onReplyPreviewClick(reply.id) }
+                )
+                Spacer(Modifier.height(6.dp))
+            }
             SelectionContainer {
                 Text(
                     text = message.payload!!.decodeToString(),
@@ -475,6 +549,21 @@ fun MessageBubble(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                if (isMyMessage) {
+                    // Кнопка "Ответить"
+                    IconButton(
+                        onClick = { onReplyClick(message) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Upload, // Icons.AutoMirrored.Filled.Reply в новых версиях
+                            contentDescription = "Ответить",
+                            tint = DarkColorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.weight(1f))
                 Icon(
                     if (message.isRead) Icons.MailRead else Icons.MailUnread,
                     contentDescription = if (message.isRead) "Прочитано" else "Не прочитано",
@@ -488,11 +577,80 @@ fun MessageBubble(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 4.dp)
                 )
+                if (!isMyMessage) {
+                    Spacer(Modifier.weight(1f))
+                    // Кнопка "Ответить"
+                    IconButton(
+                        onClick = { onReplyClick(message) },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Upload, // Icons.AutoMirrored.Filled.Reply в новых версиях
+                            contentDescription = "Ответить",
+                            tint = DarkColorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
             }
         }
     }
 }
 
+@Composable
+private fun ReplyQuote(
+    reply: Message,
+    isMyMessage: Boolean,
+    onClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    // Цвет полоски: для своих — primary, для чужих — вторичный оттенок
+    val accentColor = if (isMyMessage) DarkColorScheme.primary
+    else DarkColorScheme.tertiary
+
+    val backgroundColor = DarkColorScheme.surface.copy(alpha = 0.4f)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(backgroundColor)
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Цветная полоска слева
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(36.dp)
+                .background(accentColor, RoundedCornerShape(2.dp))
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp)
+        ) {
+            // Имя автора (если есть)
+            Text(
+                text = reply.author.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            // Текст цитируемого сообщения
+            Text(
+                text = reply.payload!!.decodeToString(),
+                style = MaterialTheme.typography.bodySmall,
+                color = DarkColorScheme.onSurface.copy(alpha = 0.85f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
 
 @Composable
 fun MessageInputFieldWithAttachment(

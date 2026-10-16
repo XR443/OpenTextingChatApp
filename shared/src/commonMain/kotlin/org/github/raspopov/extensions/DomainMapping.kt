@@ -5,6 +5,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import org.github.raspopov.domain.Account
 import org.github.raspopov.domain.ContentType
+import org.github.raspopov.domain.Extra
 import org.github.raspopov.domain.Message
 import org.github.raspopov.domain.Status
 import org.github.raspopov.entity.Accounts
@@ -14,6 +15,9 @@ import kotlin.time.Instant
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+
+private val Map<String, String>.replied: String?
+    get() = get(Extra.Params.REPLY.name)
 
 @ExperimentalUuidApi
 @JvmName("accountToDomain")
@@ -51,19 +55,19 @@ fun Sequence<Accounts>.toDomain(): Sequence<Account> {
 
 @ExperimentalUuidApi
 @JvmName("messagesToDomain")
-fun List<Messages>.toDomain(): List<Message> {
-    return this.map { it.toDomain() }
+fun List<Messages>.toDomain(replyFinder: (String?) -> Message? = { null }): List<Message> {
+    return this.map { it.toDomain(replyFinder) }
 }
 
 @ExperimentalUuidApi
 @JvmName("messagesToDomainIntermediate")
-fun Sequence<Messages>.toDomain(): Sequence<Message> {
-    return this.map { it.toDomain() }
+fun Sequence<Messages>.toDomain(replyFinder: (String?) -> Message? = { null }): Sequence<Message> {
+    return this.map { it.toDomain(replyFinder) }
 }
 
 @ExperimentalUuidApi
 @JvmName("messageToDomain")
-fun Messages.toDomain(): Message {
+fun Messages.toDomain(replyFinder: (String?) -> Message? = { null }): Message {
     return Message(
         this.id?.let { Uuid.parse(it) },
         Uuid.parse(this.internal_id),
@@ -75,8 +79,7 @@ fun Messages.toDomain(): Message {
         convertUtcMillisToLocalDateTime(this.created),
         convertUtcMillisToLocalDateTime(this.updated),
         payloadKey = payload_key
-    )
-
+    ).apply { replied = replyFinder(contentType.extraParams.replied) }
 }
 
 

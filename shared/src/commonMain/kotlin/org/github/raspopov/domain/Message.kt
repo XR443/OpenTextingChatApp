@@ -16,6 +16,27 @@ enum class Status() {
     UNKNOWN
 }
 
+class Extra {
+    enum class Params {
+        REPLY,
+        FORWARD_FROM
+    }
+
+    companion object {
+        fun reply(replied: Message?): Map<String, String> {
+            if (replied?.id != null)
+                return mapOf(Params.REPLY.name to replied.id.toString())
+            return emptyMap()
+        }
+
+        fun forward(replied: Message?): Map<String, String> {
+            if (replied?.id != null)
+                return mapOf(Params.FORWARD_FROM.name to replied.author.toString())
+            return emptyMap()
+        }
+    }
+}
+
 @Serializable
 data class ContentType(
     val mimeType: String,        // "video/mp4"
@@ -36,12 +57,17 @@ data class ContentType(
             encrypted.let { params.add("encrypted=${it.toString().lowercase()}") }
             compression?.let { params.add("compression=${it}") }
             quality?.let { params.add("quality=${it}") }
-            extraParams.forEach { (key, value) -> params.add("$key=$value") }
             // Metadata сериализуем в JSON
             metadata?.let { meta ->
                 if (meta.isNotEmpty()) {
                     val jsonStr = Json.encodeToString(meta)
                     params.add("metadata=$jsonStr")
+                }
+            }
+            extraParams.let { extra ->
+                if (extra.isNotEmpty()) {
+                    val jsonStr = Json.encodeToString(extra)
+                    params.add("extra_params=$jsonStr")
                 }
             }
             if (params.isNotEmpty()) {
@@ -64,43 +90,70 @@ data class ContentType(
         val TEXT_PLAIN = ContentType("text/plain")
         val TEXT_ENCRYPTED = ContentType("text/plain", encrypted = true)
 
-        fun textPlain(metadata: Map<String, String>? = null) =
-            ContentType("text/plain", metadata = metadata)
+        fun textPlain(
+            metadata: Map<String, String>? = null,
+            extraParams: Map<String, String> = emptyMap()
+        ) =
+            ContentType("text/plain", metadata = metadata, extraParams = extraParams)
 
-        fun textEncrypted(metadata: Map<String, String>? = null) =
-            ContentType("text/plain", encrypted = true, metadata = metadata)
+        fun textEncrypted(
+            metadata: Map<String, String>? = null,
+            extraParams: Map<String, String> = emptyMap()
+        ) =
+            ContentType(
+                "text/plain",
+                encrypted = true,
+                metadata = metadata,
+                extraParams = extraParams
+            )
 
         fun videoMp4(
             encrypted: Boolean = false,
             quality: Quality? = null,
-            metadata: Map<String, String>? = null
+            metadata: Map<String, String>? = null,
+            extraParams: Map<String, String> = emptyMap()
         ) = ContentType(
             mimeType = "video/mp4",
             encrypted = encrypted,
             quality = quality,
-            metadata = metadata
+            metadata = metadata,
+            extraParams = extraParams
         )
 
         fun imageJpeg(
             encrypted: Boolean = false,
             quality: Quality? = null,
-            metadata: Map<String, String>? = null
+            metadata: Map<String, String>? = null,
+            extraParams: Map<String, String> = emptyMap()
         ) = ContentType(
             mimeType = "image/jpeg",
             encrypted = encrypted,
             quality = quality,
-            metadata = metadata
+            metadata = metadata,
+            extraParams = extraParams
         )
 
-        fun pdfEncrypted(metadata: Map<String, String>? = null) =
-            ContentType("application/pdf", encrypted = true, metadata = metadata)
+        fun pdfEncrypted(
+            metadata: Map<String, String>? = null,
+            extraParams: Map<String, String> = emptyMap()
+        ) =
+            ContentType(
+                "application/pdf",
+                encrypted = true,
+                metadata = metadata,
+                extraParams = extraParams
+            )
 
-        fun jsonEncryptedGzip(metadata: Map<String, String>? = null) =
+        fun jsonEncryptedGzip(
+            metadata: Map<String, String>? = null,
+            extraParams: Map<String, String> = emptyMap()
+        ) =
             ContentType(
                 mimeType = "application/json",
                 encrypted = true,
                 compression = Compression.GZIP,
-                metadata = metadata
+                metadata = metadata,
+                extraParams = extraParams
             )
 
         fun fromFullType(fullType: String): ContentType {
@@ -126,22 +179,28 @@ data class ContentType(
             // Парсим metadata из JSON
             val metadata = params["metadata"]?.let { metaStr ->
                 try {
-                    Json.decodeFromString<Map<String, Any>>(metaStr)
+                    Json.decodeFromString<Map<String, String>>(metaStr)
                 } catch (e: Exception) {
                     // Если невалидный JSON, сохраняем как строку
                     mapOf("raw" to metaStr)
                 }
             }
-            // Убираем известные параметры из extra
-            val extra = params.filterKeys {
-                it !in listOf("encrypted", "compression", "quality")
+
+            val extra = params["extra_params"]?.let { metaStr ->
+                try {
+                    Json.decodeFromString<Map<String, String>>(metaStr)
+                } catch (e: Exception) {
+                    // Если невалидный JSON, сохраняем как строку
+                    mapOf("raw" to metaStr)
+                }
             }
             return ContentType(
                 mimeType = mimeType,
                 encrypted = encrypted,
                 compression = compression,
                 quality = quality,
-                extraParams = extra
+                metadata = metadata,
+                extraParams = extra ?: emptyMap()
             )
         }
     }
@@ -173,6 +232,9 @@ class Message(
         .toLocalDateTime(TimeZone.currentSystemDefault()), // todo default?
     var payloadKey: ByteArray?,
 ) {
+
+    var replied: Message? = null
+
     val isRead: Boolean
         get() = status == Status.READ
 }

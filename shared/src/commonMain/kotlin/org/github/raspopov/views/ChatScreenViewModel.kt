@@ -32,6 +32,9 @@ class ChatScreenViewModel(
     private val _loadingState = MutableStateFlow(ChatScreenViewModel.LoadingState())
     val loadingState: StateFlow<LoadingState> = _loadingState.asStateFlow()
 
+    private val _repliedMessage = MutableStateFlow<Message?>(null)
+    val repliedMessage: StateFlow<Message?> = _repliedMessage.asStateFlow()
+
     private val _newMessages = MutableStateFlow(true)
     val newMessages: StateFlow<Boolean> = _newMessages.asStateFlow()
 
@@ -112,8 +115,9 @@ class ChatScreenViewModel(
         viewModelScope.launch {
             val currentChatForMessage: Chat? = currentChat.value
             if (currentChatForMessage != null) {
-                messageService.create(text, currentChatForMessage.userId)
+                messageService.create(text, currentChatForMessage.userId, _repliedMessage.value)
                     .onCompletion {
+                        replyTo(null)
                         loadMessagesAroundSpecificOrFirst()
                         callback()
                     }
@@ -348,6 +352,10 @@ class ChatScreenViewModel(
             }
         }
         return shouldLoad
+    }
+
+    fun replyTo(message: Message?) {
+        _repliedMessage.update { message }
     }
 
 }
